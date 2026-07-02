@@ -1,0 +1,58 @@
+@startuml Sophatel_Activity_Diagram
+skinparam activityFontSize 13
+skinparam arrowColor #a0a0a0
+skinparam activityBorderColor #555555
+skinparam activityBackgroundColor #222222
+skinparam partitionBackgroundColor #111111
+skinparam partitionBorderColor #555555
+
+start
+
+partition "1. Collecte des logs" {
+  :Administrateur lance la collecte;
+  :Charger l'inventaire VPS;
+  if (Mode Mock?) then (oui)
+    :Generer logs aleatoires;
+  else (non)
+    :Connexion SSH;
+    :Lire les N dernieres lignes;
+    :Fermer connexion SSH;
+  endif
+  :Parser les lignes (format CLF);
+  :Ecrire fichiers .log et .csv;
+}
+
+partition "2. Analyse des logs" {
+  :Lire le fichier CSV;
+  :Recuperer ou creer le VPS;
+  :Creer une LogCollection;
+  :Parser chaque ligne CSV;
+  repeat
+    :Creer LogEntry et agreger stats;
+  repeat while (Entrees restantes?)
+  :Bulk insert des LogEntry;
+  :Creer LogSummary;
+  :Calculer EndpointStats;
+  :Commit en base;
+}
+
+partition "3. Visualisation" {
+  :Frontend Angular appelle l API;
+  if (Page demandee ?) then (Dashboard)
+    :GET /api/stats/global;
+    :Afficher KPIs et graphiques;
+  elseif (Gestion VPS)
+    :GET /api/vps/;
+    :Tableau + CRUD;
+  elseif (Logs)
+    :GET /api/logs/collections;
+    :Filtres et pagination;
+  elseif (Alertes)
+    :GET /api/stats/alerts;
+    :Afficher seuils critiques;
+  endif
+}
+
+stop
+
+@enduml

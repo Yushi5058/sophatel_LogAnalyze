@@ -1,0 +1,209 @@
+@startuml Sophatel_Class_Diagram
+skinparam classFontSize 13
+skinparam classBorderColor #555555
+skinparam classBackgroundColor #222222
+skinparam classHeaderBackgroundColor #222244
+skinparam arrowColor #a0a0a0
+skinparam packageBorderColor #555555
+
+package "Backend" {
+  package "Models (SQLAlchemy)" {
+    class VPSServer {
+      + id: Integer
+      + name: String
+      + host: String
+      + user: String
+      + port: Integer
+      + log_path: String
+      + password: String
+      + ssh_key: Text
+      + created_at: DateTime
+    }
+    class LogCollection {
+      + id: Integer
+      + vps_id: Integer
+      + collected_at: DateTime
+      + source_file: String
+      + total_lines: Integer
+      + mode: String
+    }
+    class LogEntry {
+      + id: BigInteger
+      + collection_id: Integer
+      + ip: String
+      + timestamp: DateTime
+      + method: String
+      + path: Text
+      + status: Integer
+      + size: BigInteger
+      + response_time: Float
+    }
+    class LogSummary {
+      + id: Integer
+      + collection_id: Integer
+      + total_requests: Integer
+      + unique_ips: Integer
+      + error_count: Integer
+      + avg_resp_time: Float
+      + top_paths: Text (JSON)
+      + status_dist: Text (JSON)
+    }
+    class EndpointStat {
+      + id: Integer
+      + collection_id: Integer
+      + endpoint: Text
+      + nb_requetes: Integer
+      + latence_moy_ms: Float
+      + latence_p95_ms: Float
+      + latence_p99_ms: Float
+      + body_moy_mo: Float
+      + taux_erreur_4xx: Float
+      + taux_erreur_5xx: Float
+    }
+    class User {
+      + id: Integer
+      + username: String
+      + hashed_password: String
+      + full_name: String
+      + role: String
+      + is_active: Integer
+      + created_at: DateTime
+    }
+  }
+
+  package "Routers (API)" {
+    class VPSRouter {
+      + GET/POST /api/vps/
+      + GET/PUT/DELETE /api/vps/{id}
+    }
+    class LogsRouter {
+      + GET /api/logs/collections
+      + GET /api/logs/collections/{id}/entries
+      + GET /api/logs/collections/{id}/summary
+    }
+    class StatsRouter {
+      + GET /api/stats/global
+      + GET /api/stats/top-paths
+      + GET /api/stats/endpoints
+      + GET /api/stats/alerts
+    }
+    class EPStatsRouter {
+      + GET /api/endpoint-stats
+      + POST /api/endpoint-stats/compute/{id}
+    }
+    class AuthRouter {
+      + POST /api/auth/login
+    }
+    class CollectRouter {
+      + POST /api/collect/{vps_id}
+    }
+    class AnalyzeRouter {
+      + POST /api/analyze/{vps_id}
+    }
+  }
+
+  package "Services" {
+    class EndpointStatsService {
+      + compute_endpoint_stats(id, db)
+      - _normalize_path(path)
+      - _percentile(data, p)
+    }
+  }
+
+  package "Core" {
+    class Config {
+      + DATABASE_URL: str
+      + SECRET_KEY: str
+      + DEBUG: bool
+      + LOG_DIR: str
+    }
+    class Database {
+      + engine: Engine
+      + SessionLocal
+      + Base
+      + get_db()
+    }
+    class Security {
+      + verify_password(pw, hashed)
+      + get_password_hash(pw)
+      + create_access_token(data)
+      + get_current_user(token, db)
+    }
+    class Scheduler {
+      + scheduler: AsyncIOScheduler
+      + register_jobs()
+    }
+  }
+
+  package "Scripts" {
+    class Runner {
+      + collect_mock(name, n)
+      + collect_ssh(host, user, ...)
+      + run_collection(list, mock)
+    }
+    class SSHClient {
+      + connect()
+      + fetch_last_n_lines(path, n)
+      + close()
+    }
+    class Mock {
+      + generate_mock_log_lines(n)
+    }
+    class Analyze {
+      + analyze_csv(csv_path, name, mode)
+      + run_analysis(dir)
+    }
+  }
+}
+
+package "Frontend Angular" {
+  class DashboardComponent {
+    + stats: GlobalStats
+    + topPaths: PathPoint[]
+    + ngOnInit()
+  }
+  class VpsComponent {
+    + vpsList: VPS[]
+    + collectingIds: Set
+    + loadVps()
+    + collectLogs(vps)
+    + analyzeLogs(vps)
+  }
+  class ApiService {
+    + getVpsList()
+    + createVps()
+    + collectLogs()
+    + getGlobalStats()
+  }
+  class VpsService {
+    + getAll()
+    + create()
+    + collect(vpsId)
+  }
+}
+
+' Relations
+VPSServer "1" -- "0..*" LogCollection
+LogCollection "1" -- "0..*" LogEntry
+LogCollection "1" -- "0..1" LogSummary
+LogCollection "1" -- "0..*" EndpointStat
+
+VPSRouter --> VPSServer : CRUD
+LogsRouter --> LogCollection : reads
+LogsRouter --> LogEntry : paginates
+StatsRouter --> LogEntry : aggregates
+
+CollectRouter --> Runner : calls
+AnalyzeRouter --> Analyze : calls
+EndpointStatsService --> EndpointStat : populates
+
+Scheduler --> Runner : triggers
+Scheduler --> Analyze : triggers
+
+ApiService --> VPSRouter : HTTP
+VpsService --> VPSRouter : HTTP
+
+DashboardComponent --> ApiService
+VpsComponent --> VpsService
+
+@enduml

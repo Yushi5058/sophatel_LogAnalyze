@@ -1,0 +1,74 @@
+@startuml Sophatel_Use_Case
+skinparam actorStyle awesome
+skinparam usecaseFontSize 14
+skinparam usecaseBorderColor #555555
+skinparam usecaseBackgroundColor #222222
+skinparam actorBorderColor #3366ff
+skinparam actorBackgroundColor #222244
+skinparam arrowColor #a0a0a0
+skinparam packageBorderColor #555555
+left to right direction
+
+actor Administrateur as admin
+actor Viewer as viewer
+actor Scheduler as scheduler
+actor "Serveur VPS" as vps
+
+rectangle "Sophatel - Log Analyzer" {
+  rectangle "Authentification" {
+    usecase "Se connecter" as UC1
+    usecase "Creer un compte" as UC2
+  }
+  rectangle "Gestion VPS" {
+    usecase "Lister les VPS" as UC3
+    usecase "Ajouter un VPS" as UC4
+    usecase "Modifier un VPS" as UC5
+    usecase "Supprimer un VPS" as UC6
+  }
+  rectangle "Collecte" {
+    usecase "Collecter les logs SSH" as UC7
+    usecase "Collecter les logs Mock" as UC8
+    usecase "Planifier la collecte" as UC9
+  }
+  rectangle "Analyse" {
+    usecase "Analyser fichier CSV" as UC10
+    usecase "Stats par endpoint" as UC11
+    usecase "Resume de collection" as UC12
+  }
+  rectangle "Visualisation" {
+    usecase "Dashboard KPIs" as UC13
+    usecase "Consulter les logs" as UC14
+    usecase "Voir stats endpoint" as UC15
+    usecase "Alertes performance" as UC16
+  }
+}
+
+admin --> UC1
+admin --> UC2
+admin --> UC4
+admin --> UC5
+admin --> UC6
+admin --> UC7
+admin --> UC8
+admin --> UC9
+admin --> UC16
+
+viewer --> UC1
+viewer --> UC3
+viewer --> UC10
+viewer --> UC11
+viewer --> UC12
+viewer --> UC13
+viewer --> UC14
+viewer --> UC15
+
+scheduler --> UC9
+scheduler --> UC11
+scheduler --> UC12
+
+vps --> UC7 : envoie les logs
+
+UC7 ..> UC10 : <<include>>
+UC10 ..> UC13 : <<include>>
+
+@enduml

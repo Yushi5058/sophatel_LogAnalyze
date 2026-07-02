@@ -1,0 +1,57 @@
+@startuml Sophatel_State_Diagram
+skinparam stateFontSize 13
+skinparam stateBorderColor #555555
+skinparam stateBackgroundColor #222222
+skinparam stateHeaderBackgroundColor #333355
+skinparam arrowColor #a0a0a0
+
+state INIT : Base de donnees creee
+state IDLE : En attente de requetes
+state COLLECTING : Collecte SSH ou Mock
+state ANALYZING : Analyse CSV et insertion DB
+state ERROR : Erreur recuperable
+state MAINTENANCE : Mode maintenance
+
+INIT --> IDLE : Demarrage FastAPI
+INIT --> IDLE : Creation utilisateurs
+INIT --> IDLE : Enregistrement jobs
+IDLE --> COLLECTING : Declenchement manuel
+IDLE --> COLLECTING : Planification (scheduler)
+COLLECTING --> ANALYZING : Fichier CSV ecrit
+ANALYZING --> IDLE : Analyse terminee + commit
+COLLECTING --> ERROR : Erreur SSH
+ANALYZING --> ERROR : Erreur parsing / DB
+ERROR --> IDLE : Retentative ou correction
+IDLE --> MAINTENANCE : API maintenance
+MAINTENANCE --> IDLE : Maintenance terminee
+
+state COLLECTION_STATES as "LogCollection" {
+  state PENDING : Collection creee
+  state POPULATING : Insertion LogEntry
+  state COMPLETE : Entrees inserees
+  state SUMMARIZED : Resume + EndpointStats
+  state FAILED : Erreur insertion
+
+  PENDING --> POPULATING : Debut analyse
+  POPULATING --> COMPLETE : bulk_save_objects OK
+  COMPLETE --> SUMMARIZED : LogSummary + EP Stats
+  POPULATING --> FAILED : Exception SQL
+  FAILED --> PENDING : Nouvelle tentative
+}
+
+state JOB_STATES as "Scheduler Jobs" {
+  state SCHEDULED : En attente
+  state RUNNING : En cours
+  state MISSED : Fenetre manquee
+  state DONE : Execute avec succes
+  state FAILED_JOB : Erreur execution
+
+  SCHEDULED --> RUNNING : Trigger
+  RUNNING --> DONE : OK
+  RUNNING --> FAILED_JOB : Exception
+  RUNNING --> MISSED : Misfire depasse
+  FAILED_JOB --> SCHEDULED : Prochain cycle
+  DONE --> SCHEDULED : Prochain cycle
+}
+
+@enduml
