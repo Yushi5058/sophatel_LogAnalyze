@@ -3,7 +3,6 @@ src/collector/ssh_client.py
 Connexion SSH réelle via Paramiko pour lire les logs Nginx distants.
 """
 import os
-import shlex
 from pathlib import Path
 from typing import Optional
 import paramiko
@@ -67,18 +66,37 @@ class SSHClient:
             with sftp.file(remote_path, "r") as f:
                 return f.read().decode("utf-8", errors="replace")
 
-    def fetch_last_n_lines(self, remote_path: str, n: int = 10_000) -> str:
+    def fetch_last_n_lines(
+        self, remote_path: str, n: int = 10_000, block: int = 1 << 20
+    ) -> str:
         """
         Récupère les N dernières lignes du fichier via SFTP (sans shell).
-        Lit le fichier complet et garde les N dernières lignes en mémoire.
+        Lit le fichier en remontant depuis la fin par blocs de `block` octets :
+        seules les dernières lignes sont chargées, la mémoire reste bornée
+        (pas de lecture intégrale d'un gros access.log).
         """
         if not self._client:
             raise RuntimeError("SSHClient non connecté.")
 
+        n = max(0, int(n))
+        if n == 0:
+            return ""
+
         with self._client.open_sftp() as sftp:
-            with sftp.file(remote_path, "r") as f:
-                lines = f.read().decode("utf-8", errors="replace").splitlines()
-        return "\n".join(lines[-max(0, int(n)):])
+            size = sftp.stat(remote_path).st_size
+            with sftp.file(remote_path, "rb") as f:
+                data = b""
+                pos = size
+                # On remonte tant qu'on n'a pas assez de sauts de ligne
+                # (n+1 pour couvrir une éventuelle dernière ligne partielle).
+                while pos > 0 and data.count(b"\n") <= n:
+                    read = min(block, pos)
+                    pos -= read
+                    f.seek(pos)
+                    data = f.read(read) + data
+
+        lines = data.decode("utf-8", errors="replace").splitlines()
+        return "\n".join(lines[-n:])
 
     def close(self) -> None:
         """Ferme la connexion SSH."""
