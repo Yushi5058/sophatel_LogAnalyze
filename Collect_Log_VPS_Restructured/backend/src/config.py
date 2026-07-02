@@ -49,4 +49,3 @@ def load_vps_inventory(path: str | None = None) -> list[dict]:
 
 # Instance globale
 config = AppConfig()
-print("DATABASE_URL =", os.getenv("DATABASE_URL"))
