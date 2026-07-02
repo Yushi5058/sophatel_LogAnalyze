@@ -17,5 +17,7 @@ pandas==2.2.2
 apscheduler==3.10.4
 # Authentification JWT
 python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+# Hachage mots de passe : pwdlib (argon2id + bcrypt legacy) remplace passlib
+# (passlib 1.7.4 abandonné et cassé avec bcrypt >= 4.1 — cf. audit #18)
+pwdlib[argon2,bcrypt]==0.3.0
 python-multipart==0.0.9
