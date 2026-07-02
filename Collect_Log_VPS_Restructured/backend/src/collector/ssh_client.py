@@ -3,6 +3,7 @@ src/collector/ssh_client.py
 Connexion SSH réelle via Paramiko pour lire les logs Nginx distants.
 """
 import os
+import shlex
 from pathlib import Path
 from typing import Optional
 import paramiko
@@ -57,29 +58,27 @@ class SSHClient:
     def fetch_file(self, remote_path: str) -> str:
         """
         Lit un fichier distant et retourne son contenu sous forme de chaîne.
-        Utilise `cat` pour lire le fichier en une seule commande.
+        Utilise SFTP (sans shell) pour éviter les injections de commandes.
         """
         if not self._client:
             raise RuntimeError("SSHClient non connecté. Appelez connect() d'abord.")
 
-        cmd = f"cat {remote_path}"
-        _, stdout, stderr = self._client.exec_command(cmd, timeout=60)
-        content = stdout.read().decode("utf-8", errors="replace")
-        error   = stderr.read().decode("utf-8", errors="replace").strip()
-
-        if error:
-            raise RuntimeError(f"Erreur SSH lors de la lecture de '{remote_path}': {error}")
-
-        return content
+        with self._client.open_sftp() as sftp:
+            with sftp.file(remote_path, "r") as f:
+                return f.read().decode("utf-8", errors="replace")
 
     def fetch_last_n_lines(self, remote_path: str, n: int = 10_000) -> str:
-        """Récupère les N dernières lignes du fichier (tail)."""
+        """
+        Récupère les N dernières lignes du fichier via SFTP (sans shell).
+        Lit le fichier complet et garde les N dernières lignes en mémoire.
+        """
         if not self._client:
             raise RuntimeError("SSHClient non connecté.")
 
-        cmd = f"tail -n {n} {remote_path}"
-        _, stdout, stderr = self._client.exec_command(cmd, timeout=60)
-        return stdout.read().decode("utf-8", errors="replace")
+        with self._client.open_sftp() as sftp:
+            with sftp.file(remote_path, "r") as f:
+                lines = f.read().decode("utf-8", errors="replace").splitlines()
+        return "\n".join(lines[-max(0, int(n)):])
 
     def close(self) -> None:
         """Ferme la connexion SSH."""

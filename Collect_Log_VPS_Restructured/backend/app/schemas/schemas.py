@@ -1,7 +1,11 @@
-from pydantic import BaseModel
+import re
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from datetime import datetime
 
+
+# Caractères interdits dans un chemin de fichier distant (shell injection)
+_FORBIDDEN_PATH_CHARS = re.compile(r'[;&|`$(){}[\]!#~<>]')
 
 class VPSBase(BaseModel):
     name: str
@@ -9,6 +13,16 @@ class VPSBase(BaseModel):
     user: str
     port: int = 22
     log_path: Optional[str] = "/var/log/nginx/access.log"
+
+    @field_validator("log_path")
+    @classmethod
+    def validate_log_path(cls, v: Optional[str]) -> Optional[str]:
+        if v and _FORBIDDEN_PATH_CHARS.search(v):
+            raise ValueError(
+                "log_path contient des caractères interdits "
+                "(shell metacharacters)"
+            )
+        return v
 
 
 class VPSCreate(VPSBase):
