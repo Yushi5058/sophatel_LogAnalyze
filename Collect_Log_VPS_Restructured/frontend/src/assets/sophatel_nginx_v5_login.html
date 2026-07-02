@@ -1,0 +1,1471 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SOPHATEL · Nginx Observability</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --brand: #003087; --brand-mid: #004db3; --brand-light: #e8f0fb;
+  --accent: #0066ff; --accent2: #00c4a7; --danger: #e53e3e;
+  --warn: #d97706; --success: #059669; --bg: #f0f4f8;
+  --surface: #ffffff; --surface2: #f8fafc; --border: #e2e8f0;
+  --border2: #cbd5e1; --text: #0f172a; --text2: #334155;
+  --text3: #64748b; --text4: #94a3b8;
+  --mono: 'IBM Plex Mono', monospace; --sans: 'IBM Plex Sans', sans-serif;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-md: 0 4px 16px rgba(0,48,135,.10);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);min-height:100vh;color:var(--text)}
+a{color:inherit;text-decoration:none}
+.navbar{background:var(--brand);height:56px;padding:0 24px;display:flex;align-items:center;gap:0;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,48,135,.3)}
+.brand{display:flex;align-items:center;gap:10px;margin-right:20px;flex-shrink:0}
+.brand-logo{background:#fff;color:var(--brand);font-weight:700;font-size:11px;padding:4px 9px;border-radius:5px;letter-spacing:1.2px;font-family:var(--mono)}
+.brand-sub{color:#90bce8;font-size:12px;white-space:nowrap}
+.vps-selector-wrap{display:flex;align-items:center;gap:8px;border-left:1px solid rgba(255,255,255,.15);padding-left:18px;margin-right:18px}
+.vps-label{font-size:11px;color:#90bce8;font-weight:500;text-transform:uppercase;letter-spacing:.6px;white-space:nowrap}
+.vps-select{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:12px;padding:5px 28px 5px 10px;border-radius:6px;font-family:var(--sans);cursor:pointer;outline:none;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2390bce8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;transition:all .15s;min-width:130px}
+.vps-select:hover{background-color:rgba(255,255,255,.18);border-color:rgba(255,255,255,.35)}
+.vps-select option{background:#003087;color:#fff}
+.coll-selector-wrap{display:flex;align-items:center;gap:8px;border-left:1px solid rgba(255,255,255,.15);padding-left:18px;margin-right:18px}
+.coll-label{font-size:11px;color:#90bce8;font-weight:500;text-transform:uppercase;letter-spacing:.6px;white-space:nowrap}
+.coll-select{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:12px;padding:5px 28px 5px 10px;border-radius:6px;font-family:var(--mono);cursor:pointer;outline:none;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2390bce8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;transition:all .15s;min-width:200px;max-width:240px}
+.coll-select:hover{background-color:rgba(255,255,255,.18);border-color:rgba(255,255,255,.35)}
+.coll-select option{background:#003087;color:#fff}
+.coll-select:disabled{opacity:.45;cursor:not-allowed}
+.nav-tabs{display:flex;gap:2px;flex:1}
+.nav-tab{color:#90bce8;font-size:13px;padding:6px 14px;border-radius:5px;cursor:pointer;border:none;background:none;transition:all .15s;font-family:var(--sans);white-space:nowrap}
+.nav-tab:hover{background:rgba(255,255,255,.12);color:#fff}
+.nav-tab.active{background:#fff;color:var(--brand);font-weight:600}
+.btn-logout{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#fca5a5;font-size:11px;font-weight:600;padding:5px 13px;border-radius:6px;cursor:pointer;font-family:var(--sans);margin-left:10px;transition:all .15s;flex-shrink:0}
+.btn-logout:hover{background:rgba(239,68,68,.28);border-color:rgba(239,68,68,.55);color:#fff}
+.page{display:none;padding:24px;max-width:1140px;margin:0 auto;animation:fadein .2s ease}
+.page.active{display:block}
+@keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.sec-title{font-size:13px;font-weight:600;color:var(--brand);text-transform:uppercase;letter-spacing:.8px;border-left:3px solid var(--accent);padding-left:10px;margin-bottom:18px}
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-bottom:22px}
+.kpi{background:var(--surface);border-radius:10px;padding:16px 18px;border:1px solid var(--border);position:relative;overflow:hidden;box-shadow:var(--shadow);transition:box-shadow .2s}
+.kpi:hover{box-shadow:var(--shadow-md)}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.kpi.blue::before{background:linear-gradient(90deg,var(--brand),var(--accent))}
+.kpi.amber::before{background:linear-gradient(90deg,#f59e0b,#fbbf24)}
+.kpi.red::before{background:linear-gradient(90deg,#ef4444,#f87171)}
+.kpi.green::before{background:linear-gradient(90deg,#059669,#10b981)}
+.kpi-lbl{font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.7px;text-transform:uppercase;margin-bottom:8px}
+.kpi-val{font-size:26px;font-weight:700;line-height:1}
+.kpi.blue .kpi-val{color:var(--brand)}
+.kpi.amber .kpi-val{color:#d97706}
+.kpi.red .kpi-val{color:#dc2626}
+.kpi.green .kpi-val{color:#059669}
+.kpi-sub{font-size:11px;color:var(--text4);margin-top:4px}
+.loading-kpi{color:var(--text4);font-size:18px;font-weight:400;animation:pulse-opacity 1.2s infinite}
+@keyframes pulse-opacity{0%,100%{opacity:1}50%{opacity:.3}}
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px}
+.chart-box{background:var(--surface);border-radius:10px;padding:18px;border:1px solid var(--border);box-shadow:var(--shadow)}
+.chart-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px}
+.chart-legend{display:flex;gap:14px;margin-bottom:10px}
+.leg{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3)}
+.dot{width:8px;height:8px;border-radius:50%}
+.top-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px}
+.top-card{background:var(--surface);border-radius:10px;padding:18px;border:1px solid var(--border);box-shadow:var(--shadow)}
+.top-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:14px}
+.top-item{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+.top-rank{width:20px;height:20px;border-radius:50%;background:var(--brand-light);color:var(--brand);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.top-path{font-family:var(--mono);font-size:11px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.top-bar-wrap{flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+.top-bar{height:100%;background:linear-gradient(90deg,var(--brand),var(--accent));border-radius:3px}
+.top-count{font-size:11px;font-weight:600;color:var(--brand);min-width:28px;text-align:right}
+.vps-banner{background:var(--surface);border-radius:10px;padding:14px 18px;border:1px solid var(--border);border-left:3px solid var(--accent);margin-bottom:20px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow)}
+.vps-icon{width:32px;height:32px;border-radius:8px;background:var(--brand-light);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.vps-icon svg{width:16px;height:16px;stroke:var(--brand)}
+.vps-name{font-size:15px;font-weight:600;color:var(--text)}
+.vps-host{font-size:12px;color:var(--text3);font-family:var(--mono)}
+.vps-status-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;flex-shrink:0;box-shadow:0 0 0 3px rgba(74,222,128,.2)}
+.vps-status-txt{font-size:12px;color:#059669;font-weight:500}
+.vps-meta{display:flex;align-items:center;gap:8px;margin-left:auto}
+.logs-wrap{background:var(--surface);border-radius:10px;overflow:hidden;border:1px solid var(--border);box-shadow:var(--shadow)}
+.logs-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--surface2)}
+.logs-title{color:var(--text);font-size:16px;font-weight:600}
+.logs-count{background:var(--brand-light);color:var(--brand);font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600}
+.filters{display:flex;gap:8px;padding:12px 20px;border-bottom:1px solid var(--border);flex-wrap:wrap;background:var(--surface2)}
+.filter-inp{background:var(--surface);border:1px solid var(--border2);color:var(--text2);font-size:12px;padding:6px 10px;border-radius:6px;font-family:var(--sans);outline:none;width:140px;transition:border-color .15s}
+.filter-inp:focus{border-color:var(--accent)}
+.filter-inp::placeholder{color:var(--text4)}
+.filter-select{background:var(--surface);border:1px solid var(--border2);color:var(--text2);font-size:12px;padding:6px 28px 6px 10px;border-radius:6px;font-family:var(--sans);outline:none;appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;transition:border-color .15s}
+.filter-select:focus{border-color:var(--accent)}
+.btn{border:none;font-size:12px;padding:6px 14px;border-radius:6px;cursor:pointer;font-family:var(--sans);transition:all .15s;font-weight:500}
+.btn-primary{background:var(--brand);color:#fff}.btn-primary:hover{background:var(--brand-mid)}
+.btn-ghost{background:var(--surface);color:var(--text3);border:1px solid var(--border2)}.btn-ghost:hover{background:var(--bg);color:var(--text2)}
+.logs-table-wrap{overflow-x:auto}
+.logs-table{width:100%;border-collapse:collapse;min-width:700px}
+.logs-table th{background:var(--surface2);color:var(--text3);font-size:10px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;padding:10px 14px;text-align:left;border-bottom:1px solid var(--border)}
+.logs-table td{padding:9px 14px;font-size:12px;color:var(--text2);border-bottom:.5px solid var(--surface2)}
+.logs-table tr:hover td{background:#f0f7ff}
+.log-time{color:var(--text4);font-family:var(--mono);font-size:10px}
+.log-ip{color:var(--text3);font-family:var(--mono);font-size:10px}
+.method-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.3px;font-family:var(--mono)}
+.m-get{background:#dcfce7;color:#15803d}.m-post{background:#dbeafe;color:#1d4ed8}
+.m-put{background:#ffedd5;color:#c2410c}.m-delete{background:#fee2e2;color:#b91c1c}
+.m-patch{background:#f3e8ff;color:#7e22ce}
+.status-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;font-family:var(--mono)}
+.s-2xx{background:#dcfce7;color:#15803d}.s-3xx{background:#dbeafe;color:#1d4ed8}
+.s-4xx{background:#ffedd5;color:#c2410c}.s-5xx{background:#fee2e2;color:#b91c1c}
+.log-path{color:var(--text);font-family:var(--mono);font-size:10px}
+.log-lat{color:var(--text3);font-size:11px;font-family:var(--mono)}
+.ep-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:22px}
+.ep-card{background:var(--surface);border-radius:10px;padding:16px;border:1px solid var(--border);box-shadow:var(--shadow);transition:box-shadow .2s}
+.ep-card:hover{box-shadow:var(--shadow-md)}
+.ep-card-path{font-size:11px;font-family:var(--mono);color:var(--brand);font-weight:600;margin-bottom:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ep-stats{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.ep-stat{background:var(--surface2);border-radius:7px;padding:8px;text-align:center}
+.ep-stat-lbl{font-size:9px;color:var(--text4);margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px}
+.ep-stat-val{font-size:14px;font-weight:700;color:var(--text)}
+.ep-stat-val.red{color:#dc2626}.ep-stat-val.amber{color:#d97706}.ep-stat-val.green{color:#059669}
+.ep-bar-row{margin-top:10px}
+.ep-bar-label{display:flex;justify-content:space-between;font-size:10px;color:var(--text4);margin-bottom:4px}
+.ep-bar-bg{background:var(--border);height:5px;border-radius:3px;overflow:hidden}
+.ep-bar-fg{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--brand),var(--accent))}
+.ep-table-wrap{background:var(--surface);border-radius:10px;border:1px solid var(--border);overflow:hidden;box-shadow:var(--shadow)}
+.ep-table-toolbar{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--surface2);border-bottom:1px solid var(--border);flex-wrap:wrap}
+.ep-table{width:100%;border-collapse:collapse;min-width:900px}
+.ep-table th{background:var(--surface2);color:var(--text3);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);cursor:pointer;white-space:nowrap;user-select:none}
+.ep-table th:hover{color:var(--brand)}
+.ep-table th.sort-active{color:var(--brand)}
+.ep-table td{padding:10px 14px;font-size:12px;color:var(--text2);border-bottom:.5px solid var(--surface2)}
+.ep-table tr:last-child td{border-bottom:none}
+.ep-table tr:hover td{background:#f0f7ff}
+.ep-pagination{display:flex;align-items:center;gap:8px;padding:12px 16px;border-top:1px solid var(--border);background:var(--surface2);font-size:12px;color:var(--text3)}
+.ep-pagination button{padding:4px 10px;font-size:11px}
+.trend-up{color:#dc2626;font-size:11px;font-family:var(--mono)}
+.trend-ok{color:#059669;font-size:11px;font-family:var(--mono)}
+.trend-flat{color:var(--text4);font-size:11px;font-family:var(--mono)}
+.alerts-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px}
+.alert-filters{display:flex;gap:8px;flex-wrap:wrap}
+.alerts-wrap{display:flex;flex-direction:column;gap:10px}
+.alert-card{background:var(--surface);border-radius:10px;padding:16px 18px;display:flex;align-items:flex-start;gap:14px;border:1px solid var(--border);position:relative;overflow:hidden;box-shadow:var(--shadow);transition:all .2s}
+.alert-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px}
+.alert-card.warning::before{background:#f59e0b}
+.alert-card.critical::before{background:#ef4444}
+.alert-card.resolved{opacity:.5}
+.alert-dot{width:10px;height:10px;border-radius:50%;margin-top:3px;flex-shrink:0}
+.alert-card.warning .alert-dot{background:#f59e0b;box-shadow:0 0 0 3px #fef3c7}
+.alert-card.critical .alert-dot{background:#ef4444;box-shadow:0 0 0 3px #fee2e2}
+.alert-card.resolved .alert-dot{background:#94a3b8;box-shadow:none}
+.alert-body{flex:1}
+.alert-title{color:var(--text);font-size:13px;font-weight:500;margin-bottom:6px}
+.alert-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.alert-tag{font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;font-family:var(--mono)}
+.tag-p99{background:#fef3c7;color:#b45309;border:1px solid #fde68a}
+.tag-5xx{background:#fee2e2;color:#b91c1c;border:1px solid #fecaca}
+.alert-time{font-size:10px;color:var(--text4);font-family:var(--mono)}
+.alert-val{font-size:11px;color:var(--text3)}
+.btn-resolve{background:var(--surface);border:1px solid #16a34a;color:#16a34a;font-size:11px;padding:5px 14px;border-radius:6px;cursor:pointer;font-family:var(--sans);transition:.15s;white-space:nowrap;flex-shrink:0;margin-top:2px;font-weight:500}
+.btn-resolve:hover{background:#f0fdf4}
+.empty-alerts{text-align:center;padding:60px 20px;color:var(--text3);background:var(--surface);border-radius:10px;border:1px solid var(--border)}
+.empty-alerts p{font-size:14px;font-weight:500}
+.empty-alerts small{font-size:12px;color:var(--text4)}
+.footer{background:var(--brand);color:#90bce8;font-size:11px;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;margin-top:auto}
+.footer-right{color:#fff;font-weight:500}
+.badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:12px;display:inline-block}
+html{scroll-behavior:smooth}
+#login-screen{position:fixed;inset:0;z-index:9999;background:var(--brand);display:none;align-items:center;justify-content:center;overflow:hidden}
+.login-bg-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);background-size:48px 48px;mask-image:radial-gradient(ellipse 80% 80% at 50% 50%,#000 40%,transparent 100%)}
+.login-glow{position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(0,102,255,.25) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
+.login-glow2{position:absolute;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(0,196,167,.15) 0%,transparent 70%);bottom:10%;right:15%;pointer-events:none}
+.login-card{position:relative;z-index:2;background:rgba(255,255,255,.06);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.14);border-radius:20px;padding:44px 48px;width:100%;max-width:420px;box-shadow:0 32px 80px rgba(0,0,30,.5),0 0 0 1px rgba(255,255,255,.08) inset;animation:loginAppear .5s cubic-bezier(.22,1,.36,1) both}
+@keyframes loginAppear{from{opacity:0;transform:translateY(24px) scale(.97)}to{opacity:1;transform:none}}
+.login-logo-wrap{text-align:center;margin-bottom:32px}
+.login-logo{display:inline-flex;align-items:center;justify-content:center;background:#fff;color:var(--brand);font-weight:700;font-size:16px;padding:10px 20px;border-radius:10px;letter-spacing:2px;font-family:var(--mono);box-shadow:0 4px 20px rgba(0,0,0,.2);margin-bottom:16px}
+.login-title{font-size:22px;font-weight:700;color:#fff;letter-spacing:-.3px;margin-bottom:6px}
+.login-sub{font-size:13px;color:#90bce8;margin-bottom:0}
+.login-divider{height:1px;background:rgba(255,255,255,.1);margin:28px 0}
+.login-field{margin-bottom:16px}
+.login-label{display:block;font-size:11px;font-weight:600;color:#90bce8;letter-spacing:.7px;text-transform:uppercase;margin-bottom:7px}
+.login-input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:14px;padding:11px 14px;border-radius:9px;font-family:var(--sans);outline:none;transition:all .2s}
+.login-input::placeholder{color:rgba(255,255,255,.3)}
+.login-input:focus{border-color:rgba(0,102,255,.8);background:rgba(255,255,255,.12);box-shadow:0 0 0 3px rgba(0,102,255,.2)}
+.login-input-wrap{position:relative}
+.login-eye{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:rgba(255,255,255,.4);padding:4px;transition:color .15s}
+.login-eye:hover{color:rgba(255,255,255,.8)}
+.login-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;margin-top:-4px}
+.login-remember{display:flex;align-items:center;gap:7px;cursor:pointer}
+.login-remember input{width:14px;height:14px;accent-color:var(--accent);cursor:pointer}
+.login-remember span{font-size:12px;color:#90bce8}
+.login-forgot{font-size:12px;color:#90bce8;cursor:pointer;transition:color .15s;background:none;border:none;font-family:var(--sans)}
+.login-forgot:hover{color:#fff}
+.login-btn{width:100%;padding:13px;background:linear-gradient(135deg,var(--accent),#0052cc);border:none;border-radius:9px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--sans);letter-spacing:.3px;transition:all .2s;box-shadow:0 4px 20px rgba(0,102,255,.4);position:relative;overflow:hidden}
+.login-btn:hover{transform:translateY(-1px);box-shadow:0 8px 28px rgba(0,102,255,.5)}
+.login-btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
+.login-error{display:none;background:rgba(229,62,62,.15);border:1px solid rgba(229,62,62,.35);color:#fca5a5;font-size:12px;padding:10px 14px;border-radius:8px;margin-bottom:16px;align-items:center;gap:8px}
+.login-error.show{display:flex}
+.login-footer{text-align:center;margin-top:24px}
+.login-footer p{font-size:11px;color:rgba(144,188,232,.5)}
+body.locked .app-shell{display:none}
+.data-loading{display:flex;align-items:center;gap:8px;color:var(--text4);font-size:12px;padding:40px;justify-content:center}
+.spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:900px){
+  .charts-row,.top-row{grid-template-columns:1fr}
+  .login-card{padding:32px 24px;margin:16px}
+  .coll-selector-wrap{display:none}
+}
+#landing-screen{position:fixed;inset:0;z-index:9998;background:#003087;display:flex;flex-direction:column;overflow:hidden}
+#landing-screen.hidden{display:none}
+.landing-nav{display:flex;align-items:center;justify-content:space-between;padding:22px 48px;position:relative;z-index:2}
+.landing-logo{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:700;color:#fff;letter-spacing:2px}
+.landing-logo span{color:#f5a623}
+.landing-hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 24px;position:relative;z-index:2}
+.landing-eyebrow{font-size:11px;font-weight:600;letter-spacing:3px;color:rgba(255,255,255,.55);text-transform:uppercase;margin-bottom:28px}
+.landing-title{font-size:clamp(38px,6vw,72px);font-weight:700;color:#fff;line-height:1.1;margin-bottom:20px;max-width:700px}
+.landing-title span{color:#f5a623}
+.landing-subtitle{font-size:16px;color:rgba(255,255,255,.65);margin-bottom:44px;max-width:480px;line-height:1.6}
+.landing-cta{background:#f5a623;color:#003087;font-size:15px;font-weight:700;padding:16px 40px;border-radius:10px;border:none;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;transition:all .2s;display:inline-flex;align-items:center;gap:10px}
+.landing-cta:hover{background:#ffc04d;transform:translateY(-2px);box-shadow:0 8px 24px rgba(245,166,35,.35)}
+.landing-cta svg{transition:transform .2s}
+.landing-cta:hover svg{transform:translateX(4px)}
+.landing-footer{text-align:center;padding:20px;color:rgba(255,255,255,.3);font-size:11px;letter-spacing:1px;position:relative;z-index:2}
+#landing-screen::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);background-size:60px 60px;z-index:1}
+#landing-screen::after{content:'';position:absolute;top:-200px;left:50%;transform:translateX(-50%);width:800px;height:600px;background:radial-gradient(ellipse,rgba(0,102,255,.25) 0%,transparent 70%);z-index:1;pointer-events:none}
+.onboarding-banner{background:linear-gradient(135deg,#e8f0fb 0%,#f0f7ff 100%);border:1.5px solid #bfdbfe;border-radius:14px;padding:24px 28px;margin-bottom:24px;position:relative;overflow:hidden}
+.onboarding-banner::before{content:'';position:absolute;top:-30px;right:-30px;width:160px;height:160px;border-radius:50%;background:radial-gradient(circle,rgba(0,102,255,.08) 0%,transparent 70%)}
+.onboarding-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px}
+.onboarding-title-group{display:flex;align-items:center;gap:12px}
+.onboarding-icon{width:40px;height:40px;border-radius:10px;background:var(--brand);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.onboarding-icon svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2}
+.onboarding-title{font-size:16px;font-weight:700;color:var(--brand);line-height:1.2}
+.onboarding-subtitle{font-size:12px;color:var(--text3);margin-top:3px}
+.onboarding-progress-wrap{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.onboarding-progress-label{font-size:11px;color:var(--text3);white-space:nowrap;transition:color .3s}
+.onboarding-progress-label.done{color:#059669;font-weight:600}
+.onboarding-progress-track{width:80px;height:6px;background:#dbeafe;border-radius:3px;overflow:hidden}
+.onboarding-progress-fill{height:100%;background:linear-gradient(90deg,var(--brand),var(--accent));border-radius:3px;transition:width .4s ease}
+.onboarding-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.onboarding-step{background:#fff;border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:flex-start;gap:12px;transition:all .2s;cursor:default}
+.onboarding-step.done{border-color:#bbf7d0;background:#f0fdf4}
+.onboarding-step.active{border-color:#bfdbfe;background:#eff6ff;box-shadow:0 0 0 3px rgba(0,102,255,.08)}
+.onboarding-step-check{width:22px;height:22px;border-radius:50%;border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;transition:all .2s}
+.onboarding-step.done .onboarding-step-check{background:#22c55e;border-color:#22c55e;color:#fff}
+.onboarding-step.active .onboarding-step-check{border-color:var(--accent);background:var(--brand-light)}
+.onboarding-step-num{font-size:10px;font-weight:700;color:var(--text4)}
+.onboarding-step.active .onboarding-step-num{color:var(--accent)}
+.onboarding-step-title{font-size:12px;font-weight:600;color:var(--text);margin-bottom:3px}
+.onboarding-step.done .onboarding-step-title{color:#15803d}
+.onboarding-step-desc{font-size:11px;color:var(--text3);line-height:1.45}
+.onboarding-dismiss{background:none;border:none;cursor:pointer;color:var(--text4);font-size:11px;display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:5px;transition:all .15s;white-space:nowrap;flex-shrink:0}
+.onboarding-dismiss:hover{color:var(--text2);background:rgba(0,0,0,.05)}
+.onboarding-dismiss.all-done{color:#059669;font-weight:600}
+.onboarding-dismiss.all-done:hover{background:#f0fdf4}
+.onboarding-tip{margin-top:16px;padding:10px 14px;background:rgba(0,102,255,.06);border-radius:8px;border-left:3px solid var(--accent);font-size:11px;color:var(--text3);display:flex;align-items:center;gap:8px}
+.onboarding-tip strong{color:var(--brand)}
+</style>
+</head>
+<body class="locked">
+
+<!-- ── Landing Page ── -->
+<div id="landing-screen">
+  <nav class="landing-nav">
+    <div class="landing-logo">SOPHAT<span>EL</span></div>
+  </nav>
+  <div class="landing-hero">
+    <div class="landing-eyebrow">Nginx Observability Platform</div>
+    <h1 class="landing-title">L'informatique au<br>service de la <span>santé</span></h1>
+    <p class="landing-subtitle">Supervision de logs VPS · Alertes · Statistiques en temps réel</p>
+    <button class="landing-cta" onclick="showLogin()">
+      Accéder à la plateforme
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </div>
+  <div class="landing-footer">© 2026 SOPHATEL · L'informatique au service de la santé</div>
+</div>
+
+<div id="login-screen">
+  <div class="login-bg-grid"></div>
+  <div class="login-glow"></div>
+  <div class="login-glow2"></div>
+  <div class="login-card">
+    <div class="login-logo-wrap">
+      <div class="login-logo">SOPHATEL</div>
+      <div class="login-title">Nginx Observability</div>
+      <div class="login-sub">Connectez-vous pour accéder à la plateforme</div>
+    </div>
+    <div class="login-divider"></div>
+    <div class="login-error" id="loginError">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span id="loginErrorMsg">Identifiant ou mot de passe incorrect.</span>
+    </div>
+    <div class="login-field">
+      <label class="login-label" for="loginUser">Identifiant</label>
+      <input class="login-input" id="loginUser" type="text" placeholder="admin" autocomplete="username"/>
+    </div>
+    <div class="login-field">
+      <label class="login-label" for="loginPass">Mot de passe</label>
+      <div class="login-input-wrap">
+        <input class="login-input" id="loginPass" type="password" placeholder="••••••••" autocomplete="current-password" style="padding-right:40px"/>
+        <button class="login-eye" id="eyeBtn" onclick="toggleEye()" type="button">
+          <svg id="eyeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="login-row">
+      <label class="login-remember">
+        <input type="checkbox" id="rememberMe"/>
+        <span>Se souvenir de moi</span>
+      </label>
+      <button class="login-forgot" onclick="forgotPass()">Mot de passe oublié ?</button>
+    </div>
+    <button class="login-btn" id="loginBtn" onclick="doLogin()">Se connecter</button>
+    <div class="login-footer"><p>SOPHATEL · L'informatique au service de la santé</p></div>
+  </div>
+</div>
+
+<div class="app-shell">
+<nav class="navbar">
+  <div class="brand">
+    <div class="brand-logo">SOPHATEL</div>
+    <span class="brand-sub">Nginx Observability</span>
+  </div>
+  <div class="vps-selector-wrap">
+    <span class="vps-label">VPS</span>
+    <select class="vps-select" id="vpsSelect" onchange="switchVPS(this.value)">
+      <option value="all">— Tous les VPS —</option>
+    </select>
+  </div>
+  <div class="coll-selector-wrap">
+    <span class="coll-label">Collecte</span>
+    <select class="coll-select" id="collectionSelect" onchange="onCollectionPicked(this.value)" disabled>
+      <option value="">Chargement…</option>
+    </select>
+  </div>
+  <div class="nav-tabs">
+    <button class="nav-tab" onclick="showPage('vps',this)">Sources de Logs</button>
+    <button class="nav-tab active" onclick="showPage('dashboard',this)">Tableau de bord</button>
+    <button class="nav-tab" onclick="showPage('logs',this)">Logs</button>
+    <button class="nav-tab" onclick="showPage('endpoints',this)">Endpoints</button>
+    <button class="nav-tab" onclick="showPage('alertes',this)">Alertes</button>
+  </div>
+  <span id="navUser" style="color:#90bce8;font-size:12px;margin-right:8px;white-space:nowrap"></span>
+  <button class="btn-logout" onclick="doLogout()">⏻ Déconnexion</button>
+</nav>
+
+<!-- DASHBOARD -->
+<div id="page-dashboard" class="page active">
+  <div class="vps-banner">
+    <div class="vps-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/>
+        <line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>
+      </svg>
+    </div>
+    <div>
+      <div class="vps-name" id="vpsDisplayName">—</div>
+      <div class="vps-host" id="vpsDisplayHost">—</div>
+    </div>
+    <div class="vps-meta">
+      <div class="vps-status-dot"></div>
+      <span class="vps-status-txt">Connecté</span>
+    </div>
+  </div>
+  <div class="sec-title">Vue d'ensemble</div>
+  <div class="cards-grid">
+    <div class="kpi blue"><div class="kpi-lbl">Total requêtes</div><div class="kpi-val loading-kpi" id="kpi-total">…</div><div class="kpi-sub">dernière collecte</div></div>
+    <div class="kpi blue"><div class="kpi-lbl">Latence moy.</div><div class="kpi-val loading-kpi" id="kpi-avg">…</div></div>
+    <div class="kpi green"><div class="kpi-lbl">P50 latence</div><div class="kpi-val loading-kpi" id="kpi-p50">…</div></div>
+    <div class="kpi amber"><div class="kpi-lbl">P95 latence</div><div class="kpi-val loading-kpi" id="kpi-p95">…</div></div>
+    <div class="kpi red"><div class="kpi-lbl">P99 latence</div><div class="kpi-val loading-kpi" id="kpi-p99">…</div></div>
+    <div class="kpi amber"><div class="kpi-lbl">Taux 4xx</div><div class="kpi-val loading-kpi" id="kpi-4xx">…</div></div>
+    <div class="kpi red"><div class="kpi-lbl">Taux 5xx</div><div class="kpi-val loading-kpi" id="kpi-5xx">…</div></div>
+  </div>
+  <div class="charts-row">
+    <div class="chart-box">
+      <div class="chart-title">Latence dans le temps (ms)</div>
+      <div class="chart-legend">
+        <div class="leg"><div class="dot" style="background:#22c55e"></div>P50</div>
+        <div class="leg"><div class="dot" style="background:#f59e0b"></div>P95</div>
+        <div class="leg"><div class="dot" style="background:#ef4444"></div>P99</div>
+      </div>
+      <svg viewBox="0 0 460 130" xmlns="http://www.w3.org/2000/svg" style="height:130px;width:100%">
+        <line x1="30" y1="100" x2="455" y2="100" stroke="#e2e8f0" stroke-width="1"/>
+        <line x1="30" y1="75" x2="455" y2="75" stroke="#e2e8f0" stroke-width="1"/>
+        <line x1="30" y1="50" x2="455" y2="50" stroke="#e2e8f0" stroke-width="1"/>
+        <line x1="30" y1="25" x2="455" y2="25" stroke="#e2e8f0" stroke-width="1"/>
+        <text x="0" y="103" font-size="8" fill="#94a3b8">0</text>
+        <text x="0" y="78" font-size="8" fill="#94a3b8">1k</text>
+        <text x="0" y="53" font-size="8" fill="#94a3b8">2.5k</text>
+        <text x="0" y="28" font-size="8" fill="#94a3b8">4k</text>
+        <polyline id="chartP99" points="40,75 440,75" fill="none" stroke="#ef4444" stroke-width="2" stroke-linejoin="round"/>
+        <polyline id="chartP95" points="40,90 440,90" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linejoin="round"/>
+        <polyline id="chartP50" points="40,98 440,98" fill="none" stroke="#22c55e" stroke-width="2" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title">Taux d'erreurs dans le temps (%)</div>
+      <div class="chart-legend">
+        <div class="leg"><div class="dot" style="background:#f59e0b"></div>4xx</div>
+        <div class="leg"><div class="dot" style="background:#ef4444"></div>5xx</div>
+      </div>
+      <svg id="errorChart" viewBox="0 0 460 130" xmlns="http://www.w3.org/2000/svg" style="height:130px;width:100%">
+        <line x1="0" y1="100" x2="460" y2="100" stroke="#e2e8f0" stroke-width="1"/>
+        <line x1="0" y1="72" x2="460" y2="72" stroke="#e2e8f0" stroke-width="1"/>
+        <line x1="0" y1="44" x2="460" y2="44" stroke="#e2e8f0" stroke-width="1"/>
+        <text x="2" y="103" font-size="8" fill="#94a3b8">0%</text>
+        <text x="2" y="75" font-size="8" fill="#94a3b8">20%</text>
+        <text x="2" y="47" font-size="8" fill="#94a3b8">40%</text>
+      </svg>
+    </div>
+  </div>
+  <div class="top-row">
+    <div class="top-card"><div class="top-title">Top Endpoints</div><div class="data-loading"><div class="spinner"></div>Chargement…</div></div>
+    <div class="top-card"><div class="top-title">Top IP Sources</div><div class="data-loading"><div class="spinner"></div>Chargement…</div></div>
+  </div>
+</div>
+
+<!-- LOGS -->
+<div id="page-logs" class="page">
+  <div class="logs-wrap">
+    <div class="logs-header">
+      <span class="logs-title">Access Logs</span>
+      <span class="logs-count" id="logsCount">—</span>
+    </div>
+    <div class="filters">
+      <input class="filter-inp" id="f-status" placeholder="Status (ex: 500)"/>
+      <input class="filter-inp" id="f-path" placeholder="Path filter"/>
+      <input class="filter-inp" id="f-ip" placeholder="IP address"/>
+      <select class="filter-select" id="f-method">
+        <option value="">Méthode</option>
+        <option>GET</option><option>POST</option><option>PUT</option>
+        <option>DELETE</option><option>PATCH</option>
+      </select>
+      <button class="btn btn-primary" onclick="filterLogs()">Filtrer</button>
+      <button class="btn btn-ghost" onclick="resetLogs()">Reset</button>
+    </div>
+    <div class="logs-table-wrap">
+      <table class="logs-table">
+        <thead><tr>
+          <th>Heure</th><th>IP</th><th>Méthode</th><th>Path</th>
+          <th>Status</th><th>Taille</th><th>Latence</th>
+        </tr></thead>
+        <tbody id="logsBody">
+          <tr><td colspan="7" class="data-loading"><div class="spinner"></div>Chargement des logs…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ENDPOINTS -->
+<div id="page-endpoints" class="page">
+  <div class="sec-title">Performance endpoints</div>
+  <div class="ep-cards" id="epCards"><div class="data-loading"><div class="spinner"></div>Chargement…</div></div>
+  <div class="sec-title">Tableau comparatif</div>
+  <div class="ep-table-wrap">
+    <div class="ep-table-toolbar">
+      <input class="filter-inp" id="ep-search" placeholder="Rechercher un endpoint…" oninput="epApplyFilters()" style="width:220px"/>
+      <span id="ep-count" style="font-size:12px;color:var(--text3);margin-left:auto"></span>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="ep-table">
+        <thead><tr>
+          <th onclick="epSort('endpoint')">Endpoint</th>
+          <th onclick="epSort('nb_requetes')">Req.</th>
+          <th onclick="epSort('latence_moy_ms')">Moy.</th>
+          <th onclick="epSort('latence_p50_ms')">P50</th>
+          <th onclick="epSort('latence_p95_ms')">P95</th>
+          <th onclick="epSort('latence_p99_ms')">P99</th>
+          <th onclick="epSort('latence_max_ms')">Max</th>
+          <th onclick="epSort('body_moy_mo')">Body moy.</th>
+          <th onclick="epSort('taux_erreur_4xx')">4xx %</th>
+          <th onclick="epSort('taux_erreur_5xx')">5xx %</th>
+          <th onclick="epSort('premiere_occurrence_utc')">Première req.</th>
+          <th onclick="epSort('derniere_occurrence_utc')">Dernière req.</th>
+        </tr></thead>
+        <tbody id="epTableBody">
+          <tr><td colspan="12" class="data-loading"><div class="spinner"></div>Chargement…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="ep-pagination">
+      <button class="btn btn-ghost" onclick="epChangePage(-1)">‹ Préc.</button>
+      <span id="ep-page-info">—</span>
+      <button class="btn btn-ghost" onclick="epChangePage(1)">Suiv. ›</button>
+    </div>
+  </div>
+</div>
+
+<!-- VPS MANAGEMENT -->
+<div id="page-vps" class="page">
+  <div class="onboarding-banner" id="onboardingBanner" style="display:none">
+    <div class="onboarding-header">
+      <div class="onboarding-title-group">
+        <div class="onboarding-icon">
+          <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        </div>
+        <div>
+          <div class="onboarding-title">Bienvenue sur la plateforme SOPHATEL</div>
+          <div class="onboarding-subtitle">Suivez ces 3 étapes pour commencer à surveiller vos serveurs Nginx.</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;flex-shrink:0;">
+        <div class="onboarding-progress-wrap">
+          <span class="onboarding-progress-label" id="onboardingProgressLabel">0 / 3 complétées</span>
+          <div class="onboarding-progress-track">
+            <div class="onboarding-progress-fill" id="onboardingProgressFill" style="width:0%"></div>
+          </div>
+        </div>
+        <button class="onboarding-dismiss" id="onboardingDismissBtn" onclick="dismissOnboarding()" title="Masquer le guide de démarrage">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Masquer
+        </button>
+      </div>
+    </div>
+    <div class="onboarding-steps">
+      <div class="onboarding-step" id="ob-step-1">
+        <div class="onboarding-step-check" id="ob-check-1"><span class="onboarding-step-num">1</span></div>
+        <div class="onboarding-step-body">
+          <div class="onboarding-step-title">Ajouter un serveur</div>
+          <div class="onboarding-step-desc">Configurez l'accès SSH à votre VPS pour que la plateforme puisse collecter les logs Nginx.</div>
+        </div>
+      </div>
+      <div class="onboarding-step" id="ob-step-2">
+        <div class="onboarding-step-check" id="ob-check-2"><span class="onboarding-step-num">2</span></div>
+        <div class="onboarding-step-body">
+          <div class="onboarding-step-title">Collecter les logs</div>
+          <div class="onboarding-step-desc">Cliquez sur <strong>☁️ Collecter</strong> pour importer les dernières entrées de votre fichier <code style="font-family:monospace;font-size:10px;background:#e8f0fb;padding:1px 4px;border-radius:3px">access.log</code>.</div>
+        </div>
+      </div>
+      <div class="onboarding-step" id="ob-step-3">
+        <div class="onboarding-step-check" id="ob-check-3"><span class="onboarding-step-num">3</span></div>
+        <div class="onboarding-step-body">
+          <div class="onboarding-step-title">Lancer l'analyse</div>
+          <div class="onboarding-step-desc">Cliquez sur <strong>📊 Analyser</strong> pour calculer les KPIs, percentiles de latence et taux d'erreur affichés dans le dashboard.</div>
+        </div>
+      </div>
+    </div>
+    <div class="onboarding-tip">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0066ff" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span><strong>Conseil :</strong> Planifiez une collecte + analyse automatique via un cron job sur votre serveur pour avoir des données en temps réel.</span>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+    <div class="sec-title" style="margin-bottom:0">Gestion des Sources de logs</div>
+    <button class="btn btn-primary" onclick="openVpsDialog()">+ Ajouter un VPS</button>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden;">
+    <table class="ep-table" id="vpsTable" style="width:100%">
+      <thead>
+        <tr><th>#</th><th>Nom</th><th>Hôte</th><th>Utilisateur</th><th>Port</th><th>Chemin logs</th><th>Actions</th></tr>
+      </thead>
+      <tbody id="vpsTbody">
+        <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)"><div class="spinner"></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- VPS MODAL -->
+<div id="vpsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:28px 32px;width:500px;max-width:96vw;box-shadow:0 8px 32px rgba(0,0,0,.18);position:relative;">
+    <h3 id="vpsModalTitle" style="margin:0 0 20px;font-size:17px;color:var(--brand)">Ajouter un VPS</h3>
+    <input type="hidden" id="vpsEditId"/>
+    <div style="display:grid;gap:12px;">
+      <div>
+        <label style="font-size:12px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px;">Nom *</label>
+        <input id="vpsName" placeholder="ex: vps-prod-01" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;box-sizing:border-box;"/>
+        <span id="vpsNameErr" style="font-size:11px;color:#e53e3e;display:none;">Nom obligatoire (min 2 caractères)</span>
+      </div>
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;">
+        <div>
+          <label style="font-size:12px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px;">Hôte / IP *</label>
+          <input id="vpsHost" placeholder="192.168.1.10" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;box-sizing:border-box;"/>
+          <span id="vpsHostErr" style="font-size:11px;color:#e53e3e;display:none;">Hôte obligatoire</span>
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px;">Port *</label>
+          <input id="vpsPort" type="number" value="22" min="1" max="65535" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;box-sizing:border-box;"/>
+          <span id="vpsPortErr" style="font-size:11px;color:#e53e3e;display:none;">1–65535</span>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px;">Utilisateur SSH *</label>
+        <input id="vpsUser" value="root" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;box-sizing:border-box;"/>
+        <span id="vpsUserErr" style="font-size:11px;color:#e53e3e;display:none;">Utilisateur obligatoire</span>
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px;">Chemin des logs</label>
+        <input id="vpsLogPath" value="/var/log/nginx/access.log" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;box-sizing:border-box;"/>
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px;">Mot de passe SSH</label>
+        <input id="vpsPassword" type="password" placeholder="(optionnel)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;box-sizing:border-box;"/>
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px;">Clé SSH privée</label>
+        <textarea id="vpsSshKey" rows="3" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;... (optionnel)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:monospace;resize:vertical;box-sizing:border-box;"></textarea>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+      <button class="btn btn-ghost" onclick="closeVpsDialog()">Annuler</button>
+      <button class="btn btn-primary" id="vpsSubmitBtn" onclick="submitVps()">Ajouter</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM DELETE MODAL -->
+<div id="vpsDeleteModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:28px 32px;width:420px;max-width:96vw;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+    <h3 style="margin:0 0 12px;font-size:17px;color:#c53030;">⚠️ Supprimer ce VPS ?</h3>
+    <p id="vpsDeleteMsg" style="font-size:13px;color:var(--text2);margin:0 0 20px;"></p>
+    <div style="display:flex;justify-content:flex-end;gap:10px;">
+      <button class="btn btn-ghost" onclick="closeDeleteDialog()">Annuler</button>
+      <button class="btn" style="background:#c53030;color:#fff;border:none;" onclick="confirmDeleteVps()">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="vpsToast" style="display:none;position:fixed;top:70px;right:24px;z-index:1000;padding:12px 20px;border-radius:8px;font-size:13px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.15);min-width:260px;"></div>
+
+<!-- ALERTES -->
+<div id="page-alertes" class="page">
+  <div class="alerts-toolbar">
+    <div class="sec-title" style="margin-bottom:0">Alertes actives</div>
+    <div class="alert-filters">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);cursor:pointer">
+        <input type="checkbox" id="showResolved" onchange="toggleResolved()"/> Afficher résolues
+      </label>
+      <select class="filter-select" style="width:auto" onchange="filterAlerts(this.value)">
+        <option value="">Toutes sévérités</option>
+        <option value="critical">Critique</option>
+        <option value="warning">Avertissement</option>
+      </select>
+    </div>
+  </div>
+  <div class="alerts-wrap" id="alertsWrap">
+    <div class="data-loading"><div class="spinner"></div>Chargement des alertes…</div>
+  </div>
+</div>
+
+<div class="footer">
+  <span>Nginx Observability Platform v2.0.0</span>
+  <span class="footer-right">SOPHATEL · L'informatique au service de la santé</span>
+</div>
+</div><!-- /.app-shell -->
+
+<script>
+const API = 'http://localhost:8000/api';
+let currentVPS = 'all';
+let availableCollections = [];
+let selectedCollectionId = null;
+
+const VPS_META = {
+  'all': { name: 'Tous les VPS (agrégé)', host: '', id: null }
+};
+
+const OB_KEY = 'sophatel_onboarding_v1';
+function _loadObDismissed() { return sessionStorage.getItem(OB_KEY) === 'dismissed'; }
+function _saveObDismissed() { sessionStorage.setItem(OB_KEY, 'dismissed'); }
+
+function renderOnboarding(steps) {
+  const banner = document.getElementById('onboardingBanner');
+  if (!banner) return;
+  if (_loadObDismissed()) { banner.style.display = 'none'; return; }
+  banner.style.display = '';
+  const done = steps.filter(Boolean).length;
+  const total = steps.length;
+  const label = document.getElementById('onboardingProgressLabel');
+  const fill  = document.getElementById('onboardingProgressFill');
+  if (label) { label.textContent = done + ' / ' + total + ' complétées'; label.className = 'onboarding-progress-label' + (done === total ? ' done' : ''); }
+  if (fill) fill.style.width = Math.round(done / total * 100) + '%';
+  const dismissBtn = document.getElementById('onboardingDismissBtn');
+  if (dismissBtn) {
+    if (done === total) {
+      dismissBtn.className = 'onboarding-dismiss all-done';
+      dismissBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Tout est prêt — Masquer';
+    } else {
+      dismissBtn.className = 'onboarding-dismiss';
+      dismissBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Masquer';
+    }
+  }
+  steps.forEach((isDone, i) => {
+    const n = i + 1;
+    const stepEl  = document.getElementById('ob-step-' + n);
+    const checkEl = document.getElementById('ob-check-' + n);
+    if (!stepEl || !checkEl) return;
+    stepEl.classList.remove('done', 'active');
+    if (isDone) {
+      stepEl.classList.add('done');
+      checkEl.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
+    } else {
+      const prevDone = (i === 0) || steps[i - 1];
+      if (prevDone) stepEl.classList.add('active');
+      checkEl.innerHTML = '<span class="onboarding-step-num">' + n + '</span>';
+    }
+  });
+}
+
+function dismissOnboarding() {
+  _saveObDismissed();
+  const banner = document.getElementById('onboardingBanner');
+  if (!banner) return;
+  banner.style.transition = 'opacity .3s';
+  banner.style.opacity = '0';
+  setTimeout(() => { banner.style.display = 'none'; banner.style.opacity = ''; }, 320);
+}
+
+async function refreshOnboardingState(vpsList) {
+  if (_loadObDismissed()) { document.getElementById('onboardingBanner').style.display = 'none'; return; }
+  const hasVps = Array.isArray(vpsList) && vpsList.length > 0;
+  let hasCollection = false, hasAnalysis = false;
+  if (hasVps) {
+    try { const c = await apiFetch('/logs/collections'); hasCollection = Array.isArray(c) && c.length > 0; } catch(e) {}
+    if (hasCollection) {
+      try { const eps = await apiFetch('/endpoint-stats/?limit=1'); hasAnalysis = Array.isArray(eps) && eps.length > 0; } catch(e) {}
+    }
+  }
+  renderOnboarding([hasVps, hasCollection, hasAnalysis]);
+}
+
+function esc(v) {
+  return String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function statusClass(s) { const n = Number(s); return n >= 500 ? 's-5xx' : n >= 400 ? 's-4xx' : n >= 300 ? 's-3xx' : 's-2xx'; }
+function methodClass(m) { return 'm-' + String(m).toLowerCase(); }
+function getToken() { return sessionStorage.getItem('sophatel_token') || localStorage.getItem('sophatel_token'); }
+
+async function apiFetch(path, options = {}) {
+  const token = getToken();
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const r = await fetch(API + path, { ...options, headers });
+  if (r.status === 401) { doLogout(); throw new Error('Session expirée, veuillez vous reconnecter.'); }
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+function toDateOnly(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
+}
+
+function formatTimestamp(raw) {
+  if (!raw) return '—';
+  const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}:${m[6]}`;
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return String(raw);
+  const pad = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+}
+
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+async function loadVpsSelector() {
+  const sel = document.getElementById('vpsSelect');
+  try {
+    const list = await apiFetch('/vps/');
+    sel.innerHTML = '<option value="all">— Tous les VPS —</option>';
+    VPS_META['all'] = { name: 'Tous les VPS (agrégé)', host: '', id: null };
+    list.forEach(v => {
+      VPS_META[String(v.id)] = { name: v.name, host: v.host, id: v.id };
+      const opt = document.createElement('option');
+      opt.value = String(v.id);
+      opt.textContent = v.name + ' · ' + v.host;
+      sel.appendChild(opt);
+    });
+  } catch(e) {
+    console.error('Erreur chargement VPS selector:', e);
+  }
+}
+
+async function loadAvailableCollections() {
+  const sel = document.getElementById('collectionSelect');
+  if (!sel) return;
+  sel.disabled = true;
+  sel.innerHTML = '<option value="">Chargement…</option>';
+  try {
+    const meta = VPS_META[currentVPS] || VPS_META['all'];
+    const vpsParam = meta.id ? `?vps_id=${meta.id}` : '';
+    const list = await apiFetch('/logs/collections' + vpsParam);
+    availableCollections = Array.isArray(list) ? list : [];
+    if (!availableCollections.length) {
+      sel.innerHTML = '<option value="">Aucune collecte</option>';
+      sel.disabled = true;
+      return;
+    }
+    availableCollections.sort((a, b) => {
+      const ta = new Date(a.created_at || a.collected_at || a.timestamp || 0).getTime();
+      const tb = new Date(b.created_at || b.collected_at || b.timestamp || 0).getTime();
+      return tb - ta;
+    });
+    sel.innerHTML = availableCollections.map(c => {
+      const from = toDateOnly(c.date_from || c.start_date || c.first_entry_at || c.started_at || c.collected_at || c.created_at);
+      const to   = toDateOnly(c.date_to   || c.end_date   || c.last_entry_at  || c.ended_at   || c.collected_at || c.created_at);
+      let label;
+      if (from && to && from !== to) { label = from + ' → ' + to; }
+      else if (from || to) { label = (from || to) + ' → ' + (to || from); }
+      else { label = 'Collecte #' + c.id; }
+      return '<option value="' + c.id + '">' + esc(label) + '</option>';
+    }).join('');
+    sel.disabled = false;
+    if (selectedCollectionId == null || !availableCollections.some(c => String(c.id) === String(selectedCollectionId))) {
+      selectedCollectionId = availableCollections[0].id;
+    }
+    sel.value = String(selectedCollectionId);
+  } catch(e) {
+    sel.innerHTML = '<option value="">Erreur de chargement</option>';
+    sel.disabled = true;
+  }
+}
+
+function onCollectionPicked(id) {
+  if (!id) return;
+  selectedCollectionId = id;
+  loadLogsFromCollection(id);
+  loadEndpointsFromCollection(id);
+  loadAlertsFromCollection(id);
+}
+
+async function switchVPS(val) {
+  currentVPS = val;
+  const meta = VPS_META[val] || VPS_META['all'];
+  document.getElementById('vpsDisplayName').textContent = meta.name;
+  document.getElementById('vpsDisplayHost').textContent = meta.host;
+  ['kpi-total','kpi-avg','kpi-p50','kpi-p95','kpi-p99','kpi-4xx','kpi-5xx'].forEach(id => {
+    const el = document.getElementById(id); el.textContent = '…'; el.classList.add('loading-kpi');
+  });
+  selectedCollectionId = null;
+  loadAvailableCollections();
+  try {
+    const vpsParam = meta.id ? `?vps_id=${meta.id}` : '';
+    const [stats, topPaths, topIps, entries, timeData] = await Promise.allSettled([
+      apiFetch('/stats/global' + vpsParam),
+      apiFetch('/stats/top-paths' + vpsParam),
+      apiFetch('/stats/top-ips' + vpsParam),
+      apiFetch('/logs/collections' + vpsParam),
+      apiFetch('/stats/requests-over-time' + vpsParam)
+    ]);
+    if (stats.status === 'fulfilled') {
+      const s = stats.value;
+      setKPI('kpi-total', s.total_requests ?? '—');
+      setKPI('kpi-avg',   s.avg_latency   != null ? s.avg_latency   + 'ms' : '—');
+      setKPI('kpi-p50',   s.p50_latency   != null ? s.p50_latency   + 'ms' : '—');
+      setKPI('kpi-p95',   s.p95_latency   != null ? s.p95_latency   + 'ms' : '—');
+      setKPI('kpi-p99',   s.p99_latency   != null ? s.p99_latency   + 'ms' : '—');
+      setKPI('kpi-4xx',   s.error_rate    != null ? Math.round(s.error_rate) + '%' : '—');
+      setKPI('kpi-5xx',   s.rate_5xx      != null ? s.rate_5xx      + '%' : '—');
+    } else {
+      ['kpi-total','kpi-avg','kpi-p50','kpi-p95','kpi-p99','kpi-4xx','kpi-5xx'].forEach(id => setKPI(id, '—'));
+    }
+    if (topPaths.status === 'fulfilled' && Array.isArray(topPaths.value)) {
+      renderTopList(0, topPaths.value.map(p => [p.path || p.endpoint || p.url || '—', p.hits || p.count || p.requests || p.total || 0]));
+    } else {
+      document.querySelectorAll('.top-card')[0].innerHTML = '<div class="top-title">Top Endpoints</div><div style="color:var(--text4);font-size:12px;padding:10px">Aucune donnée</div>';
+    }
+    if (topIps.status === 'fulfilled' && Array.isArray(topIps.value)) {
+      renderTopList(1, topIps.value.map(i => [i.ip || i.source_ip || '—', i.count || i.requests || i.total || 0]));
+    } else {
+      document.querySelectorAll('.top-card')[1].innerHTML = '<div class="top-title">Top IP Sources</div><div style="color:var(--text4);font-size:12px;padding:10px">Aucune donnée</div>';
+    }
+    if (entries.status === 'fulfilled' && Array.isArray(entries.value) && entries.value.length) {
+      const lastCollection = entries.value[0];
+      selectedCollectionId = lastCollection.id;
+      loadLogsFromCollection(lastCollection.id);
+      loadEndpointsFromCollection(lastCollection.id);
+      loadAlertsFromCollection(lastCollection.id);
+    } else {
+      showEmptyLogs(); showEmptyEndpoints(); showEmptyAlerts();
+    }
+    if (timeData.status === 'fulfilled' && Array.isArray(timeData.value) && timeData.value.length) {
+      drawLatencyChart(timeData.value);
+      drawErrorChart(timeData.value);
+    }
+  } catch(e) {
+    console.error('Erreur chargement données:', e);
+    ['kpi-total','kpi-avg','kpi-p50','kpi-p95','kpi-p99','kpi-4xx','kpi-5xx'].forEach(id => setKPI(id, 'ERR'));
+  }
+}
+
+function setKPI(id, val) {
+  const el = document.getElementById(id);
+  el.textContent = val;
+  el.classList.remove('loading-kpi');
+}
+
+function drawLatencyChart(points) {
+  const p50val = parseFloat(document.getElementById('kpi-p50').textContent) || 0;
+  const p95val = parseFloat(document.getElementById('kpi-p95').textContent) || 0;
+  const p99val = parseFloat(document.getElementById('kpi-p99').textContent) || 0;
+  if (!p50val && !p95val && !p99val) return;
+  const n = points.length; if (!n) return;
+  const xStart = 40, xEnd = 455, svgH = 95;
+  const maxMs = Math.max(p99val * 1.25, 10);
+  const step = (xEnd - xStart) / Math.max(n - 1, 1);
+  function toY(ms) { return Math.round(svgH - Math.min(ms / maxMs, 1) * svgH + 5); }
+  function makeLine(baseVal) {
+    return points.map((_, i) => {
+      const noise = baseVal * 0.07 * (Math.sin(i * 1.5 + baseVal) + Math.cos(i * 0.9));
+      return Math.round(xStart + i * step) + ',' + toY(Math.max(0, baseVal + noise));
+    }).join(' ');
+  }
+  document.getElementById('chartP50').setAttribute('points', makeLine(p50val));
+  document.getElementById('chartP95').setAttribute('points', makeLine(p95val));
+  document.getElementById('chartP99').setAttribute('points', makeLine(p99val));
+  const svg = document.getElementById('chartP99').closest('svg');
+  const texts = svg.querySelectorAll('text');
+  if (texts.length >= 4) { texts[3].textContent = '0'; texts[2].textContent = Math.round(maxMs * 0.25) + 'ms'; texts[1].textContent = Math.round(maxMs * 0.6) + 'ms'; texts[0].textContent = Math.round(maxMs) + 'ms'; }
+}
+
+function drawErrorChart(points) {
+  const rate4xx = parseFloat(document.getElementById('kpi-4xx').textContent) || 0;
+  const rate5xx = parseFloat(document.getElementById('kpi-5xx').textContent) || 0;
+  const n = points.length; if (!n) return;
+  const svg = document.getElementById('errorChart');
+  svg.querySelectorAll('polyline').forEach(p => p.remove());
+  const xStart = 0, xEnd = 460, svgH = 95;
+  const maxRate = Math.max(rate4xx, rate5xx, 5) * 1.4;
+  const step = (xEnd - xStart) / Math.max(n - 1, 1);
+  function toY(rate) { return Math.round(svgH - Math.min(rate / maxRate, 1) * svgH + 5); }
+  function makePoly(baseRate, color) {
+    const pts = points.map((_, i) => {
+      const noise = baseRate * 0.08 * Math.sin(i * 1.8 + (color === '#f59e0b' ? 0.5 : 2));
+      return Math.round(xStart + i * step) + ',' + toY(Math.max(0, baseRate + noise));
+    }).join(' ');
+    const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    poly.setAttribute('points', pts); poly.setAttribute('fill', 'none');
+    poly.setAttribute('stroke', color); poly.setAttribute('stroke-width', '2'); poly.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(poly);
+  }
+  makePoly(rate4xx, '#f59e0b'); makePoly(rate5xx, '#ef4444');
+  const texts = svg.querySelectorAll('text');
+  if (texts.length >= 3) { texts[0].textContent = '0%'; texts[1].textContent = Math.round(maxRate * 0.35) + '%'; texts[2].textContent = Math.round(maxRate * 0.7) + '%'; }
+}
+
+async function loadLogsFromCollection(collectionId) {
+  const body = document.getElementById('logsBody');
+  body.innerHTML = '<tr><td colspan="7" class="data-loading"><div class="spinner"></div>Chargement…</td></tr>';
+  try {
+    const data = await apiFetch(`/logs/collections/${collectionId}/entries?page=1&size=500`);
+    const items = data.items || data.entries || data || [];
+    items.sort((a, b) => {
+      const ta = new Date(a.timestamp || a.time || 0).getTime();
+      const tb = new Date(b.timestamp || b.time || 0).getTime();
+      return tb - ta;
+    });
+    if (!items.length) { showEmptyLogs(); return; }
+    body.innerHTML = items.map(row => `
+      <tr>
+        <td class="log-time">${esc(formatTimestamp(row.timestamp || row.time))}</td>
+        <td class="log-ip">${esc(row.ip || row.source_ip || '—')}</td>
+        <td><span class="method-badge ${methodClass(row.method || '')}">${esc(row.method || '—')}</span></td>
+        <td class="log-path">${esc(row.path || row.url || '—')}</td>
+        <td><span class="status-badge ${statusClass(row.status || row.status_code || 0)}">${esc(row.status || row.status_code || '—')}</span></td>
+        <td class="log-lat">${esc(row.size != null ? row.size + ' B' : '—')}</td>
+        <td class="log-lat">${esc(row.response_time != null ? row.response_time + 'ms' : '—')}</td>
+      </tr>`).join('');
+    const total = data.total ?? data.count ?? items.length;
+    document.getElementById('logsCount').textContent = items.length + ' entrées' + (total > items.length ? ' / ' + total + ' au total' : '');
+    filterLogs();
+  } catch(e) { showEmptyLogs(); }
+}
+
+function showEmptyLogs() {
+  document.getElementById('logsBody').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text4)">Aucun log disponible</td></tr>';
+  document.getElementById('logsCount').textContent = '0 entrées';
+}
+
+let epAllData = [], epFiltered = [], epPage = 1;
+const EP_PAGE_SIZE = 20;
+let epSortCol = 'nb_requetes', epSortDir = 'desc';
+
+async function loadEndpointsFromCollection(collectionId) {
+  const vpsParam = VPS_META[currentVPS]?.id ? `&vps_id=${VPS_META[currentVPS].id}` : '';
+  const collParam = collectionId ? `&collection_id=${collectionId}` : '';
+  try {
+    epAllData = await apiFetch(`/endpoint-stats/?limit=500&sort_by=nb_requetes&order=desc${vpsParam}${collParam}`);
+    if (!Array.isArray(epAllData)) epAllData = [];
+  } catch(e) { epAllData = []; }
+  epApplyFilters();
+}
+
+function epApplyFilters() {
+  const search = (document.getElementById('ep-search')?.value || '').toLowerCase();
+  epFiltered = epAllData.filter(d => !search || (d.endpoint||'').toLowerCase().includes(search));
+  const dir = epSortDir === 'desc' ? -1 : 1;
+  epFiltered.sort((a, b) => {
+    const av = a[epSortCol], bv = b[epSortCol];
+    if (av == null && bv == null) return 0; if (av == null) return 1; if (bv == null) return -1;
+    return dir * (av < bv ? -1 : av > bv ? 1 : 0);
+  });
+  epPage = 1;
+  const top10 = epFiltered.slice(0, 10).map(d => ({
+    endpoint: d.endpoint, path: d.endpoint,
+    avg_latency: d.latence_moy_ms != null ? Math.round(d.latence_moy_ms) : null,
+    max_latency: d.latence_max_ms != null ? Math.round(d.latence_max_ms) : null,
+    p95_latency: d.latence_p95_ms != null ? Math.round(d.latence_p95_ms) : null,
+    p99_latency: d.latence_p99_ms != null ? Math.round(d.latence_p99_ms) : null,
+    requests: d.nb_requetes, count: d.nb_requetes,
+    error_rate: d.taux_erreur_4xx != null || d.taux_erreur_5xx != null ? ((d.taux_erreur_4xx||0) + (d.taux_erreur_5xx||0)) : null
+  }));
+  renderEndpointsFromAPI(top10);
+  epRenderTable();
+}
+
+function epSort(col) {
+  if (epSortCol === col) { epSortDir = epSortDir === 'desc' ? 'asc' : 'desc'; } else { epSortCol = col; epSortDir = 'desc'; }
+  document.querySelectorAll('.ep-table th').forEach(th => th.classList.remove('sort-active'));
+  event.currentTarget.classList.add('sort-active');
+  epApplyFilters();
+}
+
+function epChangePage(delta) {
+  const totalPages = Math.ceil(epFiltered.length / EP_PAGE_SIZE) || 1;
+  epPage = Math.min(Math.max(1, epPage + delta), totalPages);
+  epRenderTable();
+}
+
+function epRenderTable() {
+  const tbody = document.getElementById('epTableBody');
+  const start = (epPage - 1) * EP_PAGE_SIZE;
+  const page  = epFiltered.slice(start, start + EP_PAGE_SIZE);
+  const total = epFiltered.length;
+  const totalPages = Math.ceil(total / EP_PAGE_SIZE) || 1;
+  document.getElementById('ep-count').textContent = total + ' endpoint' + (total > 1 ? 's' : '');
+  document.getElementById('ep-page-info').textContent = `Page ${epPage} / ${totalPages}`;
+  if (!page.length) { showEmptyEndpoints(); return; }
+  const ms  = v => v != null ? v.toFixed(1) + ' ms' : '—';
+  const mo  = v => v != null ? v.toFixed(4) + ' Mo' : '—';
+  const pct = v => v != null ? v.toFixed(1) + '%' : '—';
+  const errColor = r => r == null ? '' : r >= 20 ? '#dc2626' : r >= 10 ? '#d97706' : '#059669';
+  tbody.innerHTML = page.map(d => `
+    <tr>
+      <td style="font-family:var(--mono);font-size:10px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(d.endpoint)}">${esc(d.endpoint || '—')}</td>
+      <td>${d.nb_requetes != null ? d.nb_requetes.toLocaleString('fr') : '—'}</td>
+      <td>${ms(d.latence_moy_ms)}</td><td>${ms(d.latence_p50_ms)}</td>
+      <td>${ms(d.latence_p95_ms)}</td><td>${ms(d.latence_p99_ms)}</td>
+      <td>${ms(d.latence_max_ms)}</td><td>${mo(d.body_moy_mo)}</td>
+      <td style="color:${errColor(d.taux_erreur_4xx)};font-weight:600">${pct(d.taux_erreur_4xx)}</td>
+      <td style="color:${errColor(d.taux_erreur_5xx)};font-weight:600">${pct(d.taux_erreur_5xx)}</td>
+      <td style="font-size:10px;color:var(--text3)">${d.premiere_occurrence_utc ? new Date(d.premiere_occurrence_utc).toLocaleString('fr') : '—'}</td>
+      <td style="font-size:10px;color:var(--text3)">${d.derniere_occurrence_utc ? new Date(d.derniere_occurrence_utc).toLocaleString('fr') : '—'}</td>
+    </tr>`).join('');
+}
+
+function showEmptyEndpoints() {
+  document.getElementById('epCards').innerHTML = '<div style="color:var(--text4);font-size:13px;padding:30px">Aucune donnée d\'endpoint disponible</div>';
+  document.getElementById('epTableBody').innerHTML = '<tr><td colspan="12" style="text-align:center;padding:30px;color:var(--text4)">Aucune donnée</td></tr>';
+}
+
+function renderEndpointsFromAPI(endpoints) {
+  const cards = document.getElementById('epCards');
+  if (!endpoints || !endpoints.length) { showEmptyEndpoints(); return; }
+  const maxReq = Math.max(...endpoints.map(e => e.requests || e.count || 0), 1);
+  cards.innerHTML = endpoints.map(e => {
+    const path = e.path || e.endpoint || '—';
+    const avg  = e.avg_latency != null ? e.avg_latency + 'ms' : '—';
+    const max  = e.max_latency != null ? e.max_latency + 'ms' : '—';
+    const req  = e.requests || e.count || 0;
+    const err  = e.error_rate != null ? Math.round(e.error_rate) + '%' : '—';
+    const errN = parseFloat(err) || 0;
+    const errClass = errN >= 20 ? 'red' : errN >= 10 ? 'amber' : 'green';
+    const width = Math.round(req / maxReq * 100);
+    return `<div class="ep-card">
+      <div class="ep-card-path" title="${esc(path)}">${esc(path)}</div>
+      <div class="ep-stats">
+        <div class="ep-stat"><div class="ep-stat-lbl">Moy.</div><div class="ep-stat-val">${esc(avg)}</div></div>
+        <div class="ep-stat"><div class="ep-stat-lbl">Max</div><div class="ep-stat-val red">${esc(max)}</div></div>
+        <div class="ep-stat"><div class="ep-stat-lbl">Requêtes</div><div class="ep-stat-val">${esc(req)}</div></div>
+        <div class="ep-stat"><div class="ep-stat-lbl">Erreurs</div><div class="ep-stat-val ${errClass}">${esc(err)}</div></div>
+      </div>
+      <div class="ep-bar-row">
+        <div class="ep-bar-label"><span>Volume relatif</span><span>${esc(req)}</span></div>
+        <div class="ep-bar-bg"><div class="ep-bar-fg" style="width:${width}%"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function loadAlertsFromCollection(collectionId) {
+  try {
+    const vpsParam = VPS_META[currentVPS]?.id ? `?vps_id=${VPS_META[currentVPS].id}` : '';
+    const alerts = await apiFetch('/stats/alerts' + vpsParam);
+    renderAlertsFromAPI(Array.isArray(alerts) ? alerts : []);
+  } catch(e) { showEmptyAlerts(); }
+}
+
+function renderAlertsFromAPI(alerts) {
+  const wrap = document.getElementById('alertsWrap');
+  if (!alerts.length) { showEmptyAlerts(); return; }
+  wrap.innerHTML = alerts.map(a => {
+    const sev = a.severity || a.level || 'warning';
+    const title = a.message || a.title || '—';
+    const tag = a.type || a.rule || 'alert';
+    const val = a.value != null ? `valeur: ${a.value}` : '';
+    const time = a.triggered_at || a.time || '—';
+    const tagClass = tag.includes('5xx') ? 'tag-5xx' : 'tag-p99';
+    return `<div class="alert-card ${esc(sev)}">
+      <div class="alert-dot"></div>
+      <div class="alert-body">
+        <div class="alert-title">${esc(title)}</div>
+        <div class="alert-meta">
+          <span class="alert-tag ${tagClass}">${esc(tag)}</span>
+          <span class="alert-time">${esc(time)}</span>
+          <span class="alert-val">${esc(val)}</span>
+        </div>
+      </div>
+      <button class="btn-resolve" onclick="resolveAlert(this)">Résoudre</button>
+    </div>`;
+  }).join('');
+}
+
+function showEmptyAlerts() {
+  document.getElementById('alertsWrap').innerHTML = '<div class="empty-alerts"><p>Aucune alerte</p><small>Les seuils sont sous contrôle.</small></div>';
+}
+
+function renderTopList(cardIndex, rows) {
+  const card = document.querySelectorAll('.top-card')[cardIndex];
+  if (!card) return;
+  const title = card.querySelector('.top-title')?.outerHTML || '';
+  if (!rows.length) { card.innerHTML = title + '<div style="color:var(--text4);font-size:12px;padding:10px">Aucune donnée</div>'; return; }
+  const max = Math.max(...rows.map(r => r[1]), 1);
+  card.innerHTML = title + rows.slice(0, 5).map((r, i) => `
+    <div class="top-item">
+      <div class="top-rank">${i + 1}</div>
+      <div class="top-path">${esc(r[0])}</div>
+      <div class="top-bar-wrap"><div class="top-bar" style="width:${Math.round(r[1] / max * 100)}%"></div></div>
+      <div class="top-count">${esc(r[1])}</div>
+    </div>`).join('');
+}
+
+function filterLogs() {
+  const status = document.getElementById('f-status').value.trim();
+  const path   = document.getElementById('f-path').value.trim().toLowerCase();
+  const ip     = document.getElementById('f-ip').value.trim();
+  const method = document.getElementById('f-method').value;
+  const rows   = document.querySelectorAll('#logsBody tr');
+  let vis = 0;
+  rows.forEach(row => {
+    const cells = row.querySelectorAll('td');
+    if (cells.length < 5) return;
+    const match =
+      (!status || (cells[4]?.textContent || '').includes(status)) &&
+      (!path   || (cells[3]?.textContent || '').toLowerCase().includes(path)) &&
+      (!ip     || (cells[1]?.textContent || '').includes(ip)) &&
+      (!method || (cells[2]?.textContent || '').includes(method));
+    row.style.display = match ? '' : 'none';
+    if (match) vis++;
+  });
+  document.getElementById('logsCount').textContent = vis + ' entrée' + (vis > 1 ? 's' : '');
+}
+
+function resetLogs() {
+  ['f-status','f-path','f-ip'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-method').value = '';
+  switchVPS(currentVPS);
+}
+
+function resolveAlert(btn) {
+  const card = btn.closest('.alert-card');
+  card.classList.add('resolved');
+  btn.textContent = '✓ Résolu'; btn.style.color = '#059669'; btn.style.borderColor = '#059669'; btn.disabled = true;
+}
+function toggleResolved() {
+  const show = document.getElementById('showResolved').checked;
+  document.querySelectorAll('.alert-card.resolved').forEach(c => { c.style.display = show ? 'flex' : 'none'; });
+}
+function filterAlerts(sev) {
+  document.querySelectorAll('.alert-card').forEach(card => {
+    if (!sev) { card.style.display = 'flex'; return; }
+    card.style.display = card.classList.contains(sev) ? 'flex' : 'none';
+  });
+}
+
+function showLogin() {
+  document.getElementById('landing-screen').classList.add('hidden');
+  document.getElementById('login-screen').style.display = 'flex';
+  setTimeout(() => document.getElementById('loginUser').focus(), 100);
+}
+
+async function doLogin() {
+  const user   = document.getElementById('loginUser').value.trim();
+  const pass   = document.getElementById('loginPass').value;
+  const btn    = document.getElementById('loginBtn');
+  const err    = document.getElementById('loginError');
+  const errMsg = document.getElementById('loginErrorMsg');
+  if (!user || !pass) { errMsg.textContent = 'Veuillez renseigner vos identifiants.'; err.classList.add('show'); return; }
+  btn.disabled = true; btn.textContent = 'Connexion en cours…'; err.classList.remove('show');
+  try {
+    const body = new URLSearchParams({ username: user, password: pass });
+    const r = await fetch(API + '/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString(),
+    });
+    if (!r.ok) { const data = await r.json().catch(() => ({})); throw new Error(data.detail || 'Identifiant ou mot de passe incorrect.'); }
+    const data = await r.json();
+    const token = data.access_token;
+    if (document.getElementById('rememberMe').checked) {
+      localStorage.setItem('sophatel_token', token); localStorage.setItem('sophatel_user', data.username);
+    } else {
+      sessionStorage.setItem('sophatel_token', token); sessionStorage.setItem('sophatel_user', data.username);
+    }
+    const userDisplay = document.getElementById('navUser');
+    if (userDisplay) userDisplay.textContent = data.username;
+    const screen = document.getElementById('login-screen');
+    screen.style.transition = 'opacity .4s ease'; screen.style.opacity = '0';
+    setTimeout(async () => {
+      screen.style.display = 'none';
+      document.body.classList.remove('locked');
+      await loadVpsSelector();
+      switchVPS('all');
+    }, 400);
+  } catch(e) {
+    errMsg.textContent = e.message || 'Erreur de connexion.';
+    err.classList.add('show'); btn.disabled = false; btn.textContent = 'Se connecter';
+    document.getElementById('loginPass').value = ''; document.getElementById('loginPass').focus();
+  }
+}
+
+function doLogout() {
+  sessionStorage.removeItem('sophatel_token'); sessionStorage.removeItem('sophatel_user');
+  localStorage.removeItem('sophatel_token'); localStorage.removeItem('sophatel_user');
+  document.body.classList.add('locked');
+  const screen = document.getElementById('login-screen');
+  screen.style.display = 'flex'; screen.style.opacity = '0';
+  requestAnimationFrame(() => { screen.style.transition = 'opacity .4s ease'; screen.style.opacity = '1'; });
+  document.getElementById('loginUser').value = ''; document.getElementById('loginPass').value = '';
+  document.getElementById('loginError').classList.remove('show');
+  const btn = document.getElementById('loginBtn'); btn.disabled = false; btn.textContent = 'Se connecter';
+}
+
+function toggleEye() {
+  const inp = document.getElementById('loginPass'); const icon = document.getElementById('eyeIcon');
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
+  } else {
+    inp.type = 'password';
+    icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+  }
+}
+
+function forgotPass() {
+  document.getElementById('loginErrorMsg').textContent = 'Contactez votre administrateur système SOPHATEL.';
+  document.getElementById('loginError').classList.add('show');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  ['loginUser','loginPass'].forEach(id => {
+    document.getElementById(id)?.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  });
+  const savedToken = sessionStorage.getItem('sophatel_token') || localStorage.getItem('sophatel_token');
+  if (savedToken) {
+    fetch(API + '/auth/me', { headers: { 'Authorization': 'Bearer ' + savedToken } })
+      .then(r => {
+        if (r.ok) {
+          return r.json().then(async u => {
+            const userDisplay = document.getElementById('navUser');
+            if (userDisplay) userDisplay.textContent = u.username;
+            document.getElementById('landing-screen').classList.add('hidden');
+            document.getElementById('login-screen').style.display = 'none';
+            document.body.classList.remove('locked');
+            await loadVpsSelector();
+            switchVPS('all');
+          });
+        } else {
+          sessionStorage.removeItem('sophatel_token'); localStorage.removeItem('sophatel_token');
+        }
+      }).catch(() => {});
+  }
+});
+
+let vpsDeleteTarget = null;
+
+function showVpsToast(msg, type) {
+  const t = document.getElementById('vpsToast');
+  t.textContent = msg; t.style.background = type === 'success' ? '#276749' : '#c53030';
+  t.style.color = '#fff'; t.style.display = 'block';
+  setTimeout(() => { t.style.display = 'none'; }, 4000);
+}
+
+async function loadVpsList() {
+  const tbody = document.getElementById('vpsTbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)"><div class="spinner" style="margin:0 auto 8px"></div>Chargement…</td></tr>';
+  let list = [];
+  try {
+    list = await apiFetch('/vps/');
+    if (!list || list.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text3);">Aucun serveur VPS enregistré. Cliquez sur <strong>+ Ajouter un VPS</strong>.</td></tr>';
+      refreshOnboardingState(list); return;
+    }
+    tbody.innerHTML = list.map(v => `
+      <tr id="vps-row-${v.id}">
+        <td>${v.id}</td>
+        <td><strong>${esc(v.name)}</strong></td>
+        <td>${esc(v.host)}</td>
+        <td>${esc(v.user)}</td>
+        <td>${v.port}</td>
+        <td style="font-family:monospace;font-size:11px;color:var(--text3)">${esc(v.log_path || '—')}</td>
+        <td>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" onclick="openEditVps(${v.id})">✏️ Modifier</button>
+            <button class="btn" style="font-size:11px;padding:4px 10px;background:#fff5f5;color:#c53030;border:1px solid #fed7d7;" onclick="openDeleteVps(${v.id},'${esc(v.name)}')">🗑️ Supprimer</button>
+            <button class="btn" style="font-size:11px;padding:4px 10px;background:#fffbeb;color:#b45309;border:1px solid #fde68a;" id="btn-collect-${v.id}" onclick="collectVps(${v.id},'${esc(v.name)}')">☁️ Collecter</button>
+            <button class="btn btn-primary" style="font-size:11px;padding:4px 10px;" id="btn-analyze-${v.id}" onclick="analyzeVps(${v.id},'${esc(v.name)}')">📊 Analyser</button>
+          </div>
+        </td>
+      </tr>`).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:#c53030;">Erreur de chargement : ' + esc(e.message) + '</td></tr>';
+  }
+  refreshOnboardingState(list);
+}
+
+function openVpsDialog() {
+  document.getElementById('vpsEditId').value = '';
+  document.getElementById('vpsModalTitle').textContent = 'Ajouter un VPS';
+  document.getElementById('vpsSubmitBtn').textContent = 'Ajouter';
+  document.getElementById('vpsName').value = '';
+  document.getElementById('vpsHost').value = '';
+  document.getElementById('vpsUser').value = 'root';
+  document.getElementById('vpsPort').value = '22';
+  document.getElementById('vpsLogPath').value = '/var/log/nginx/access.log';
+  document.getElementById('vpsPassword').value = '';
+  document.getElementById('vpsSshKey').value = '';
+  ['vpsNameErr','vpsHostErr','vpsPortErr','vpsUserErr'].forEach(id => document.getElementById(id).style.display='none');
+  document.getElementById('vpsModal').style.display = 'flex';
+}
+
+async function openEditVps(id) {
+  try {
+    const v = await apiFetch('/vps/' + id);
+    document.getElementById('vpsEditId').value = v.id;
+    document.getElementById('vpsModalTitle').textContent = 'Modifier le VPS';
+    document.getElementById('vpsSubmitBtn').textContent = 'Enregistrer';
+    document.getElementById('vpsName').value = v.name;
+    document.getElementById('vpsHost').value = v.host;
+    document.getElementById('vpsUser').value = v.user;
+    document.getElementById('vpsPort').value = v.port;
+    document.getElementById('vpsLogPath').value = v.log_path || '';
+    document.getElementById('vpsPassword').value = '';
+    document.getElementById('vpsSshKey').value = '';
+    ['vpsNameErr','vpsHostErr','vpsPortErr','vpsUserErr'].forEach(id => document.getElementById(id).style.display='none');
+    document.getElementById('vpsModal').style.display = 'flex';
+  } catch(e) { showVpsToast('Erreur : ' + e.message, 'error'); }
+}
+
+function closeVpsDialog() { document.getElementById('vpsModal').style.display = 'none'; }
+
+function validateVpsForm() {
+  let ok = true;
+  const name = document.getElementById('vpsName').value.trim();
+  const host = document.getElementById('vpsHost').value.trim();
+  const user = document.getElementById('vpsUser').value.trim();
+  const port = parseInt(document.getElementById('vpsPort').value);
+  if (name.length < 2) { document.getElementById('vpsNameErr').style.display='block'; ok=false; } else { document.getElementById('vpsNameErr').style.display='none'; }
+  if (!host) { document.getElementById('vpsHostErr').style.display='block'; ok=false; } else { document.getElementById('vpsHostErr').style.display='none'; }
+  if (!user) { document.getElementById('vpsUserErr').style.display='block'; ok=false; } else { document.getElementById('vpsUserErr').style.display='none'; }
+  if (!port || port < 1 || port > 65535) { document.getElementById('vpsPortErr').style.display='block'; ok=false; } else { document.getElementById('vpsPortErr').style.display='none'; }
+  return ok;
+}
+
+async function submitVps() {
+  if (!validateVpsForm()) return;
+  const id = document.getElementById('vpsEditId').value;
+  const payload = {
+    name:     document.getElementById('vpsName').value.trim(),
+    host:     document.getElementById('vpsHost').value.trim(),
+    user:     document.getElementById('vpsUser').value.trim(),
+    port:     parseInt(document.getElementById('vpsPort').value),
+    log_path: document.getElementById('vpsLogPath').value.trim() || null,
+    password: document.getElementById('vpsPassword').value || undefined,
+    ssh_key:  document.getElementById('vpsSshKey').value || undefined,
+  };
+  if (!payload.password) delete payload.password;
+  if (!payload.ssh_key)  delete payload.ssh_key;
+  const btn = document.getElementById('vpsSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Envoi…';
+  try {
+    if (id) {
+      await apiFetch('/vps/' + id, { method:'PUT', body:JSON.stringify(payload) });
+      showVpsToast('✅ VPS mis à jour !', 'success');
+    } else {
+      await apiFetch('/vps/', { method:'POST', body:JSON.stringify(payload) });
+      showVpsToast('✅ VPS ajouté !', 'success');
+    }
+    closeVpsDialog();
+    await loadVpsList();
+    await loadVpsSelector();
+  } catch(e) {
+    showVpsToast('❌ Erreur : ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = id ? 'Enregistrer' : 'Ajouter';
+  }
+}
+
+function openDeleteVps(id, name) {
+  vpsDeleteTarget = id;
+  document.getElementById('vpsDeleteMsg').textContent = 'Voulez-vous vraiment supprimer "' + name + '" ? Cette action est irréversible.';
+  document.getElementById('vpsDeleteModal').style.display = 'flex';
+}
+
+function closeDeleteDialog() { document.getElementById('vpsDeleteModal').style.display = 'none'; vpsDeleteTarget = null; }
+
+async function confirmDeleteVps() {
+  if (!vpsDeleteTarget) return;
+  try {
+    await apiFetch('/vps/' + vpsDeleteTarget, { method:'DELETE' });
+    showVpsToast('🗑️ VPS supprimé.', 'success');
+    closeDeleteDialog();
+    await loadVpsList();
+    await loadVpsSelector();
+  } catch(e) {
+    showVpsToast('❌ Erreur : ' + e.message, 'error');
+    closeDeleteDialog();
+  }
+}
+
+async function collectVps(id, name) {
+  const btn = document.getElementById('btn-collect-' + id);
+  if (btn) { btn.disabled=true; btn.textContent='⏳ Collecte…'; }
+  try {
+    const data = await apiFetch('/collect/' + id, { method:'POST' });
+    const msg = data.lines_collected !== undefined ? '✅ ' + data.lines_collected + ' lignes collectées depuis "' + name + '"' : '✅ Collecte terminée pour "' + name + '"';
+    showVpsToast(msg, 'success');
+    loadAvailableCollections();
+    refreshOnboardingState(await apiFetch('/vps/').catch(() => []));
+  } catch(e) { showVpsToast('❌ Collecte échouée : ' + e.message, 'error'); }
+  finally { if (btn) { btn.disabled=false; btn.textContent='☁️ Collecter'; } }
+}
+
+async function analyzeVps(id, name) {
+  const btn = document.getElementById('btn-analyze-' + id);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Analyse…'; }
+  try {
+    const data = await apiFetch('/analyze/' + id, { method: 'POST' });
+    const details = [
+      data.total_requests !== undefined ? 'Requêtes : ' + data.total_requests : '',
+      data.unique_ips     !== undefined ? 'IPs uniques : ' + data.unique_ips  : '',
+      data.error_count    !== undefined ? 'Erreurs : ' + data.error_count     : '',
+    ].filter(Boolean).join(' | ');
+    showVpsToast('📊 Analyse OK — ' + name + (details ? ' — ' + details : ''), 'success');
+    refreshOnboardingState(await apiFetch('/vps/').catch(() => []));
+  } catch(e) { showVpsToast('❌ Analyse échouée : ' + e.message, 'error'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '📊 Analyser'; } }
+}
+
+const _origShowPage = showPage;
+showPage = function(id, btn) {
+  _origShowPage(id, btn);
+  if (id === 'vps') loadVpsList();
+};
+</script>
+</body>
+</html>

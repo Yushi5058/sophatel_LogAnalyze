@@ -1,0 +1,103 @@
+from contextlib import asynccontextmanager
+import logging
+
+from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from app.routers import logs, stats, vps
+from app.routers import collect_router, analyze_router
+from app.routers import endpoint_stats_router
+from app.routers import auth_router
+from app.core.database import engine, Base, get_db
+from app.core.scheduler import scheduler, register_jobs
+from app.core.security import get_current_user
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  %(name)s — %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+
+def create_default_users():
+    """Crée les utilisateurs par défaut si la table est vide."""
+    from sqlalchemy.orm import Session
+    from app.models.models import User
+    from app.core.security import get_password_hash
+
+    db: Session = next(get_db())
+    try:
+        if db.query(User).count() == 0:
+            default_users = [
+                User(username="admin",    hashed_password=get_password_hash("sophatel2024"), full_name="Administrateur", role="admin"),
+            ]
+            db.add_all(default_users)
+            db.commit()
+            logging.getLogger(__name__).info("Utilisateurs par défaut créés.")
+    finally:
+        db.close()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    create_default_users()
+    register_jobs()
+    scheduler.start()
+    yield
+    scheduler.shutdown()
+
+
+app = FastAPI(
+    title="Sophatel - VPS Log API",
+    description="API de collecte et analyse des logs Nginx",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:4200", "http://127.0.0.1:4200"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Route d'authentification — SANS protection JWT
+app.include_router(auth_router.router, prefix="/api/auth", tags=["Auth"])
+
+# Toutes les autres routes — PROTÉGÉES par JWT
+_auth = {"dependencies": [Depends(get_current_user)]}
+
+app.include_router(logs.router,                    prefix="/api/logs",           tags=["Logs"],           **_auth)
+app.include_router(stats.router,                   prefix="/api/stats",          tags=["Stats"],          **_auth)
+app.include_router(vps.router,                     prefix="/api/vps",            tags=["VPS"],            **_auth)
+app.include_router(collect_router.router,          prefix="/api/collect",        tags=["Collect"],        **_auth)
+app.include_router(analyze_router.router,          prefix="/api/analyze",        tags=["Analyze"],        **_auth)
+app.include_router(endpoint_stats_router.router,   prefix="/api/endpoint-stats", tags=["Endpoint Stats"], **_auth)
+
+
+@app.get("/api/auth/me", tags=["Auth"])
+def get_me(current_user=Depends(get_current_user)):
+    return {
+        "username": current_user.username,
+        "full_name": current_user.full_name,
+        "role": current_user.role,
+    }
+
+
+@app.get("/api/scheduler/jobs", tags=["Scheduler"])
+def list_jobs(current_user=Depends(get_current_user)):
+    return [
+        {"id": job.id, "name": job.name, "next_run": str(job.next_run_time)}
+        for job in scheduler.get_jobs()
+    ]
+
+
+@app.get("/")
+def root():
+    return {"status": "ok", "service": "Sophatel VPS Log API"}
+
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}

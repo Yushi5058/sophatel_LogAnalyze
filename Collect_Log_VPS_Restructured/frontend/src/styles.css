@@ -1,0 +1,94 @@
+/* ── Base reset ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Snackbar notifications ─────────────────────────────────── */
+.snack-success .mdc-snackbar__surface {
+  background: #14532d !important;
+  color: #86efac !important;
+}
+.snack-success .mat-mdc-snack-bar-action {
+  color: #4ade80 !important;
+}
+
+.snack-error .mdc-snackbar__surface {
+  background: #7f1d1d !important;
+  color: #fca5a5 !important;
+}
+.snack-error .mat-mdc-snack-bar-action {
+  color: #f87171 !important;
+}
+
+/* ── Mat Dialog dark theme ──────────────────────────────────── */
+.mat-mdc-dialog-container .mdc-dialog__surface {
+  background: #1e293b !important;
+  color: #e2e8f0 !important;
+  border-radius: 12px !important;
+}
+
+.mat-mdc-dialog-title {
+  color: #e2e8f0 !important;
+}
+
+/* ── Mat Form Field dark ────────────────────────────────────── */
+.mat-mdc-form-field {
+  --mdc-outlined-text-field-label-text-color: #94a3b8;
+  --mdc-outlined-text-field-input-text-color: #e2e8f0;
+  --mdc-outlined-text-field-outline-color: #334155;
+  --mdc-outlined-text-field-hover-outline-color: #64748b;
+  --mdc-outlined-text-field-focus-outline-color: #3b82f6;
+  --mdc-outlined-text-field-container-shape: 6px;
+}
+
+.mat-mdc-form-field .mdc-text-field--outlined {
+  background: #0f172a;
+}
+
+.mat-mdc-form-field .mdc-text-field textarea,
+.mat-mdc-form-field .mdc-text-field input {
+  caret-color: #3b82f6;
+}
+
+/* ── Mat Tab dark ───────────────────────────────────────────── */
+.mat-mdc-tab-group .mat-mdc-tab-header {
+  border-bottom: 1px solid #334155;
+}
+.mat-mdc-tab .mdc-tab__text-label {
+  color: #94a3b8 !important;
+}
+.mat-mdc-tab.mdc-tab--active .mdc-tab__text-label {
+  color: #3b82f6 !important;
+}
+.mat-mdc-tab-indicator .mdc-tab-indicator__content--underline {
+  border-color: #3b82f6 !important;
+}
+
+/* ── Mat Button overrides ───────────────────────────────────── */
+.mat-mdc-button,
+.mat-mdc-outlined-button,
+.mat-mdc-stroked-button {
+  --mdc-outlined-button-label-text-color: #94a3b8;
+  --mdc-outlined-button-outline-color: #334155;
+}
+
+/* ── Spinner inside button ──────────────────────────────────── */
+button mat-spinner {
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0f172a; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #475569; }
+html, body { height: 100%; }
+body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }

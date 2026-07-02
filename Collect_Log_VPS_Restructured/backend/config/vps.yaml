@@ -1,0 +1,21 @@
+vps:
+  - name: vps-prod-01
+    host: 192.168.1.10
+    user: root
+    port: 22
+    key_path: ~/.ssh/id_rsa
+    log_path: /var/log/nginx/access.log
+
+  - name: vps-prod-02
+    host: 192.168.1.11
+    user: ubuntu
+    port: 22
+    key_path: ~/.ssh/id_rsa
+    log_path: /var/log/nginx/access.log
+
+  - name: vps-staging-01
+    host: 192.168.1.20
+    user: root
+    port: 22
+    key_path: ~/.ssh/id_rsa_staging
+    log_path: /var/log/nginx/access.log
