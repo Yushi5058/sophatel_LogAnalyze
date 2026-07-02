@@ -14,7 +14,7 @@ export const routes: Routes = [
   {
     path: 'logs',
     loadComponent: () =>
-      import('./features/logs/logs.component').then(m => m.LogsComponent)
+      import('./features/logs/logs').then(m => m.Logs)
   },
   {
     path: 'vps',
