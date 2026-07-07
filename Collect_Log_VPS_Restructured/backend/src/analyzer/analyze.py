@@ -246,8 +246,24 @@ def run_analysis(log_dir: Path | None = None):
         print("[Analyseur] Aucun fichier CSV à traiter.")
         return
 
-    print(f"[Analyseur] {len(csv_files)} fichier(s) CSV trouvé(s).")
-    for csv_path in csv_files:
+    # Idempotence : ne traiter que les CSV jamais analysés.
+    # Chaque collecte produit un fichier horodaté unique, dont le chemin est
+    # enregistré dans log_collections.source_file. On saute ceux déjà présents
+    # pour éviter la ré-analyse en boucle (duplication des données).
+    db = Session()
+    try:
+        already = {row[0] for row in db.query(LogCollection.source_file).all() if row[0]}
+    finally:
+        db.close()
+
+    new_files = [p for p in csv_files if str(p) not in already]
+    skipped = len(csv_files) - len(new_files)
+    if not new_files:
+        print(f"[Analyseur] {len(csv_files)} CSV trouvé(s), tous déjà analysés — rien à faire.")
+        return
+
+    print(f"[Analyseur] {len(new_files)} nouveau(x) CSV à analyser ({skipped} déjà traité(s)).")
+    for csv_path in new_files:
         # Extrait le nom du VPS depuis le chemin : logs/<vps_name>/fichier.csv
         vps_name = csv_path.parent.name
         print(f"  → Traitement : {csv_path.name}  (VPS: {vps_name})")
