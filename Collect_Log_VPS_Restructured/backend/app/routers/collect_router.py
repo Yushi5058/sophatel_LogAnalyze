@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.security import require_role
 from app.models.models import VPSServer
 
 # ── Import du runner ──────────────────────────────────────────────────────────
@@ -22,7 +23,8 @@ router = APIRouter()
 
 
 @router.post("/{vps_id}")
-def collect_logs(vps_id: int, db: Session = Depends(get_db)):
+def collect_logs(vps_id: int, db: Session = Depends(get_db),
+                 _admin=Depends(require_role("admin"))):
     # 1. Récupérer le VPS en base
     vps = db.query(VPSServer).filter(VPSServer.id == vps_id).first()
     if not vps:

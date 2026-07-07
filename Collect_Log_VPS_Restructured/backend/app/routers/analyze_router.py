@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.security import require_role
 from app.models.models import VPSServer
 
 # ── Import de l'analyseur ─────────────────────────────────────────────────────
@@ -31,7 +32,8 @@ def _find_latest_csv(vps_name: str) -> Path | None:
 
 
 @router.post("/{vps_id}")
-def analyze_logs(vps_id: int, db: Session = Depends(get_db)):
+def analyze_logs(vps_id: int, db: Session = Depends(get_db),
+                 _admin=Depends(require_role("admin"))):
     # 1. Récupérer le VPS
     vps = db.query(VPSServer).filter(VPSServer.id == vps_id).first()
     if not vps:

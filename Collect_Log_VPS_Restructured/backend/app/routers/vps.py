@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.security import require_role
 from app.models.models import VPSServer, LogCollection, LogEntry, EndpointStat, LogSummary
 from app.schemas.schemas import VPSCreate, VPSUpdate, VPSOut
 
@@ -13,7 +14,8 @@ def list_vps(db: Session = Depends(get_db)):
 
 
 @router.post("/", response_model=VPSOut, status_code=201)
-def create_vps(payload: VPSCreate, db: Session = Depends(get_db)):
+def create_vps(payload: VPSCreate, db: Session = Depends(get_db),
+               _admin=Depends(require_role("admin"))):
     existing = db.query(VPSServer).filter(VPSServer.name == payload.name).first()
     if existing:
         raise HTTPException(status_code=409, detail=f"VPS '{payload.name}' déjà enregistré")
@@ -33,7 +35,8 @@ def get_vps(vps_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{vps_id}", response_model=VPSOut)
-def update_vps(vps_id: int, payload: VPSUpdate, db: Session = Depends(get_db)):
+def update_vps(vps_id: int, payload: VPSUpdate, db: Session = Depends(get_db),
+               _admin=Depends(require_role("admin"))):
     vps = db.query(VPSServer).filter(VPSServer.id == vps_id).first()
     if not vps:
         raise HTTPException(status_code=404, detail="VPS introuvable")
@@ -49,7 +52,8 @@ def update_vps(vps_id: int, payload: VPSUpdate, db: Session = Depends(get_db)):
 
 
 @router.delete("/{vps_id}", status_code=204)
-def delete_vps(vps_id: int, db: Session = Depends(get_db)):
+def delete_vps(vps_id: int, db: Session = Depends(get_db),
+               _admin=Depends(require_role("admin"))):
     vps = db.query(VPSServer).filter(VPSServer.id == vps_id).first()
     if not vps:
         raise HTTPException(status_code=404, detail="VPS introuvable")
