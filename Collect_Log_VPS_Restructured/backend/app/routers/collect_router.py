@@ -54,6 +54,8 @@ def collect_logs(vps_id: int, db: Session = Depends(get_db),
                 password=vps.password or None,          # mot de passe de connexion (déchiffré)
                 ssh_key=vps.ssh_key or None,            # clé privée stockée en base (déchiffrée)
                 passphrase=config.SSH_PASSPHRASE or None,  # passphrase de la clé si besoin
+                known_hosts=config.SSH_KNOWN_HOSTS,        # vérif d'identité (anti-MITM)
+                strict_host_key=config.SSH_STRICT_HOST_KEY,
             )
 
         # 3. Compter les lignes collectées depuis le CSV

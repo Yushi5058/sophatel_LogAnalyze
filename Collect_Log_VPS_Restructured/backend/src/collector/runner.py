@@ -100,12 +100,15 @@ def collect_ssh(
     passphrase: Optional[str] = None,
     password: Optional[str] = None,
     ssh_key: Optional[str] = None,
+    known_hosts: str = "~/.ssh/known_hosts",
+    strict_host_key: bool = False,
 ) -> tuple[Path, Path]:
     """Collecte réelle via SSH (clé fournie, clé locale, ou mot de passe)."""
     print(f"[SSH] Connexion à {user}@{host}:{port}...")
     with SSHClient(
         host=host, user=user, port=port, key_path=key_path,
         passphrase=passphrase, password=password, ssh_key=ssh_key,
+        known_hosts=known_hosts, strict_host_key=strict_host_key,
     ) as ssh:
         print(f"[SSH] Lecture de '{log_path}' (dernières {last_n} lignes)...")
         content = ssh.fetch_last_n_lines(log_path, n=last_n)
@@ -134,6 +137,8 @@ def run_collection(vps_list: list[dict], use_mock: bool = False) -> list[dict]:
                     key_path=vps.get("key_path", "~/.ssh/id_rsa"),
                     log_path=vps.get("log_path", "/var/log/nginx/access.log"),
                     passphrase=config.SSH_PASSPHRASE or None,
+                    known_hosts=config.SSH_KNOWN_HOSTS,
+                    strict_host_key=config.SSH_STRICT_HOST_KEY,
                 )
             results.append({"vps": name, "log_path": str(log_p), "csv_path": str(csv_p), "ok": True})
         except Exception as e:

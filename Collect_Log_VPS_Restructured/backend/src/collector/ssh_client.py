@@ -25,6 +25,8 @@ class SSHClient:
         timeout: int = 30,
         password: Optional[str] = None,
         ssh_key: Optional[str] = None,
+        known_hosts: Optional[str] = "~/.ssh/known_hosts",
+        strict_host_key: bool = False,
     ):
         self.host       = host
         self.user       = user
@@ -34,7 +36,34 @@ class SSHClient:
         self.timeout    = timeout
         self.password   = password   # mot de passe de connexion SSH
         self.ssh_key    = ssh_key    # contenu d'une clé privée (ex. stockée en base)
+        self.known_hosts     = known_hosts       # fichier known_hosts (vérif d'identité)
+        self.strict_host_key = strict_host_key   # True = rejeter les hôtes inconnus
         self._client: Optional[paramiko.SSHClient] = None
+
+    # ── Vérification de l'identité du serveur (anti-MITM) ─────────────────────
+    def _setup_host_key_policy(self) -> None:
+        """
+        Contrôle la clé d'hôte SSH pour éviter une attaque man-in-the-middle.
+        - strict_host_key=True  : RejectPolicy → seuls les hôtes déjà connus sont acceptés.
+        - strict_host_key=False : TOFU (Trust On First Use) avec **persistance** dans known_hosts ;
+          la clé est mémorisée au 1er contact, puis un changement ultérieur (MITM) est détecté
+          (BadHostKeyException). Bien plus sûr que l'ancien AutoAddPolicy sans mémorisation.
+        """
+        client = self._client
+        client.load_system_host_keys()
+        kh = os.path.expanduser(self.known_hosts) if self.known_hosts else None
+
+        if self.strict_host_key:
+            if kh and os.path.exists(kh):
+                client.load_host_keys(kh)
+            client.set_missing_host_key_policy(paramiko.RejectPolicy())
+        else:
+            if kh:
+                os.makedirs(os.path.dirname(kh) or ".", exist_ok=True)
+                if not os.path.exists(kh):
+                    open(kh, "a", encoding="utf-8").close()
+                client.load_host_keys(kh)   # rend AutoAdd persistant
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
     # ── Chargement de la clé privée ───────────────────────────────────────────
     def _key_from_string(self, content: str):
@@ -73,7 +102,7 @@ class SSHClient:
     def connect(self) -> None:
         """Ouvre la connexion SSH (clé fournie, clé locale, ou mot de passe)."""
         self._client = paramiko.SSHClient()
-        self._client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self._setup_host_key_policy()
 
         pkey = self._load_key()
 

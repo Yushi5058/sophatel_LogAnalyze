@@ -29,6 +29,9 @@ class AppConfig:
     # SSH
     SSH_KEY_PATH:   str = os.getenv("SSH_KEY_PATH", "~/.ssh/id_rsa")
     SSH_PASSPHRASE: str = os.getenv("SSH_PASSPHRASE", "")
+    # Vérification de la clé d'hôte (anti-MITM)
+    SSH_KNOWN_HOSTS: str = os.getenv("SSH_KNOWN_HOSTS", "~/.ssh/known_hosts")
+    SSH_STRICT_HOST_KEY: bool = os.getenv("SSH_STRICT_HOST_KEY", "false").lower() == "true"
 
 
 def load_vps_inventory(path: str | None = None) -> list[dict]:
