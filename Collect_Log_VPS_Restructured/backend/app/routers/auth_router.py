@@ -45,8 +45,5 @@ def login(
         "role": user.role,
     }
 
-
-@router.get("/me")
-def get_me(db: Session = Depends(get_db), token_data: dict = Depends(lambda: None)):
-    """Endpoint de vérification du token - protégé par get_current_user dans main"""
-    pass
+# NB : GET /api/auth/me est défini (protégé par get_current_user) dans app/main.py.
+# L'ancien stub ici renvoyait null et masquait la vraie route — supprimé (RM-09).
