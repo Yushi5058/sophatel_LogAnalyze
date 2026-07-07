@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKe
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
+from app.core.crypto import EncryptedText
 
 
 class VPSServer(Base):
@@ -14,9 +15,9 @@ class VPSServer(Base):
     user       = Column(String(100), nullable=False, default="root")
     port       = Column(Integer, default=22)
     log_path   = Column(String(500), nullable=True, default="/var/log/nginx/access.log")
-    # Authentification (chiffrer en production)
-    password   = Column(String(500), nullable=True)
-    ssh_key    = Column(Text, nullable=True)
+    # Authentification — chiffrée au repos (Fernet) via EncryptedText
+    password   = Column(EncryptedText, nullable=True)
+    ssh_key    = Column(EncryptedText, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     collections = relationship("LogCollection", back_populates="vps")
