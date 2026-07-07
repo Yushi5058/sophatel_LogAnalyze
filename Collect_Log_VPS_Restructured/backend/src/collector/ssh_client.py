@@ -3,9 +3,13 @@ src/collector/ssh_client.py
 Connexion SSH réelle via Paramiko pour lire les logs Nginx distants.
 """
 import os
+from io import StringIO
 from pathlib import Path
 from typing import Optional
 import paramiko
+
+# Types de clés privées supportés (essayés dans l'ordre)
+_KEY_TYPES = (paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey)
 
 
 class SSHClient:
@@ -19,6 +23,8 @@ class SSHClient:
         key_path: Optional[str] = None,
         passphrase: Optional[str] = None,
         timeout: int = 30,
+        password: Optional[str] = None,
+        ssh_key: Optional[str] = None,
     ):
         self.host       = host
         self.user       = user
@@ -26,33 +32,67 @@ class SSHClient:
         self.key_path   = os.path.expanduser(key_path or "~/.ssh/id_rsa")
         self.passphrase = passphrase
         self.timeout    = timeout
+        self.password   = password   # mot de passe de connexion SSH
+        self.ssh_key    = ssh_key    # contenu d'une clé privée (ex. stockée en base)
         self._client: Optional[paramiko.SSHClient] = None
 
+    # ── Chargement de la clé privée ───────────────────────────────────────────
+    def _key_from_string(self, content: str):
+        for cls in _KEY_TYPES:
+            try:
+                return cls.from_private_key(StringIO(content), password=self.passphrase or None)
+            except paramiko.ssh_exception.PasswordRequiredException:
+                raise ValueError(
+                    "La clé SSH fournie est protégée par une passphrase ; renseignez SSH_PASSPHRASE."
+                )
+            except (paramiko.SSHException, ValueError):
+                continue  # mauvais type de clé, on essaie le suivant
+        raise ValueError("Clé SSH fournie invalide ou non supportée (RSA/Ed25519/ECDSA).")
+
+    def _key_from_file(self, path: str):
+        for cls in _KEY_TYPES:
+            try:
+                return cls.from_private_key_file(path, password=self.passphrase or None)
+            except paramiko.ssh_exception.PasswordRequiredException:
+                raise ValueError(
+                    f"La clé SSH '{path}' est protégée par une passphrase ; renseignez SSH_PASSPHRASE."
+                )
+            except (paramiko.SSHException, ValueError):
+                continue
+        raise ValueError(f"Clé SSH '{path}' invalide ou non supportée (RSA/Ed25519/ECDSA).")
+
+    def _load_key(self):
+        # 1) clé fournie en contenu (prioritaire, ex. depuis la base chiffrée)
+        if self.ssh_key:
+            return self._key_from_string(self.ssh_key)
+        # 2) sinon, fichier de clé local
+        if self.key_path and os.path.exists(self.key_path):
+            return self._key_from_file(self.key_path)
+        return None
+
     def connect(self) -> None:
-        """Ouvre la connexion SSH."""
+        """Ouvre la connexion SSH (clé fournie, clé locale, ou mot de passe)."""
         self._client = paramiko.SSHClient()
         self._client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-        pkey = None
-        if os.path.exists(self.key_path):
-            try:
-                pkey = paramiko.RSAKey.from_private_key_file(
-                    self.key_path,
-                    password=self.passphrase or None,
-                )
-            except paramiko.ssh_exception.PasswordRequiredException:
-                raise ValueError(
-                    f"La clé SSH '{self.key_path}' est protégée par mot de passe. "
-                    "Définissez SSH_PASSPHRASE dans votre .env."
-                )
+        pkey = self._load_key()
 
-        self._client.connect(
+        kwargs = dict(
             hostname=self.host,
             port=self.port,
             username=self.user,
-            pkey=pkey,
             timeout=self.timeout,
         )
+        if pkey is not None:
+            kwargs["pkey"] = pkey
+        if self.password:
+            kwargs["password"] = self.password
+        # Auth par mot de passe seul : ne pas piocher dans les clés locales / l'agent
+        if self.password and pkey is None:
+            kwargs["look_for_keys"] = False
+            kwargs["allow_agent"] = False
+
+        self._client.connect(**kwargs)
 
     def fetch_file(self, remote_path: str) -> str:
         """
