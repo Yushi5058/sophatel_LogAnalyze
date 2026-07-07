@@ -19,20 +19,44 @@ logging.basicConfig(
 
 
 def create_default_users():
-    """Crée les utilisateurs par défaut si la table est vide."""
+    """
+    Crée le compte admin initial si la table est vide.
+    Le mot de passe n'est PAS en dur : il vient de ADMIN_PASSWORD (.env), sinon
+    un mot de passe aléatoire est généré et journalisé une seule fois.
+    """
+    import os
+    import secrets
     from sqlalchemy.orm import Session
     from app.models.models import User
     from app.core.security import get_password_hash
 
+    log = logging.getLogger(__name__)
     db: Session = next(get_db())
     try:
         if db.query(User).count() == 0:
-            default_users = [
-                User(username="admin",    hashed_password=get_password_hash("sophatel2024"), full_name="Administrateur", role="admin"),
-            ]
-            db.add_all(default_users)
+            username = os.getenv("ADMIN_USERNAME", "admin")
+            password = os.getenv("ADMIN_PASSWORD")
+            generated = not password
+            if generated:
+                password = secrets.token_urlsafe(16)
+
+            db.add(User(
+                username=username,
+                hashed_password=get_password_hash(password),
+                full_name="Administrateur",
+                role="admin",
+            ))
             db.commit()
-            logging.getLogger(__name__).info("Utilisateurs par défaut créés.")
+
+            if generated:
+                log.warning(
+                    "Compte admin '%s' créé avec un mot de passe ALÉATOIRE : %s\n"
+                    "  → Notez-le et changez-le. Définissez ADMIN_PASSWORD dans .env "
+                    "pour choisir ce mot de passe.",
+                    username, password,
+                )
+            else:
+                log.info("Compte admin '%s' créé depuis ADMIN_PASSWORD.", username)
     finally:
         db.close()
 
