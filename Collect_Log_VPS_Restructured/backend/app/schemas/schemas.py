@@ -36,8 +36,18 @@ class VPSUpdate(BaseModel):
     user:     Optional[str] = None
     port:     Optional[int] = None
     log_path: Optional[str] = None
-    # password: Optional[str] = None
-    # ssh_key:  Optional[str] = None
+    password: Optional[str] = None
+    ssh_key:  Optional[str] = None
+
+    @field_validator("log_path")
+    @classmethod
+    def validate_log_path(cls, v: Optional[str]) -> Optional[str]:
+        if v and _FORBIDDEN_PATH_CHARS.search(v):
+            raise ValueError(
+                "log_path contient des caractères interdits "
+                "(shell metacharacters)"
+            )
+        return v
 
 
 class VPSOut(VPSBase):
