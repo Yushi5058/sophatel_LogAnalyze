@@ -60,3 +60,20 @@ def get_current_user(
     if user is None or not user.is_active:
         raise credentials_exception
     return user
+
+
+def require_role(*allowed_roles: str):
+    """
+    Dépendance FastAPI : autorise seulement les utilisateurs dont le rôle figure
+    dans `allowed_roles`. À poser sur les routes sensibles (mutations).
+    Ex. : current_user = Depends(require_role("admin"))
+    """
+    def checker(current_user=Depends(get_current_user)):
+        if current_user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Accès réservé au(x) rôle(s) : " + ", ".join(allowed_roles),
+            )
+        return current_user
+
+    return checker

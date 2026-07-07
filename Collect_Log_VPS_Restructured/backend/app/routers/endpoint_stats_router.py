@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 
 from app.core.database import get_db
+from app.core.security import require_role
 from app.models.models import EndpointStat, LogCollection
 from app.schemas.schemas import EndpointStatOut
 from app.services.endpoint_stats_service import compute_endpoint_stats
@@ -70,7 +71,8 @@ def stats_by_collection(collection_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/compute/{collection_id}")
-def compute_stats(collection_id: int, db: Session = Depends(get_db)):
+def compute_stats(collection_id: int, db: Session = Depends(get_db),
+                  _admin=Depends(require_role("admin"))):
     """
     Déclenche manuellement le calcul des stats d'endpoint
     pour une collection existante.
