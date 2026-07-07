@@ -19,7 +19,7 @@ def create_vps(payload: VPSCreate, db: Session = Depends(get_db),
     existing = db.query(VPSServer).filter(VPSServer.name == payload.name).first()
     if existing:
         raise HTTPException(status_code=409, detail=f"VPS '{payload.name}' déjà enregistré")
-    vps = VPSServer(**payload.dict())
+    vps = VPSServer(**payload.model_dump())
     db.add(vps)
     db.commit()
     db.refresh(vps)
@@ -44,7 +44,7 @@ def update_vps(vps_id: int, payload: VPSUpdate, db: Session = Depends(get_db),
         conflict = db.query(VPSServer).filter(VPSServer.name == payload.name).first()
         if conflict:
             raise HTTPException(status_code=409, detail=f"VPS '{payload.name}' déjà enregistré")
-    for field, value in payload.dict(exclude_unset=True).items():
+    for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(vps, field, value)
     db.commit()
     db.refresh(vps)
