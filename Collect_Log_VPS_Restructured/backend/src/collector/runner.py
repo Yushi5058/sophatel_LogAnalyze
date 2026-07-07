@@ -98,10 +98,15 @@ def collect_ssh(
     log_path: str = "/var/log/nginx/access.log",
     last_n: int = 50_000,
     passphrase: Optional[str] = None,
+    password: Optional[str] = None,
+    ssh_key: Optional[str] = None,
 ) -> tuple[Path, Path]:
-    """Collecte réelle via SSH."""
+    """Collecte réelle via SSH (clé fournie, clé locale, ou mot de passe)."""
     print(f"[SSH] Connexion à {user}@{host}:{port}...")
-    with SSHClient(host=host, user=user, port=port, key_path=key_path, passphrase=passphrase) as ssh:
+    with SSHClient(
+        host=host, user=user, port=port, key_path=key_path,
+        passphrase=passphrase, password=password, ssh_key=ssh_key,
+    ) as ssh:
         print(f"[SSH] Lecture de '{log_path}' (dernières {last_n} lignes)...")
         content = ssh.fetch_last_n_lines(log_path, n=last_n)
 

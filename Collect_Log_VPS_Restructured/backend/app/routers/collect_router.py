@@ -49,9 +49,11 @@ def collect_logs(vps_id: int, db: Session = Depends(get_db),
                 host=vps.host,
                 user=vps.user,
                 port=vps.port or 22,
-                key_path=getattr(vps, "key_path", None) or "~/.ssh/id_rsa",
+                key_path=config.SSH_KEY_PATH,          # repli : clé locale
                 log_path=vps.log_path or "/var/log/nginx/access.log",
-                passphrase=getattr(vps, "password", None) or None,
+                password=vps.password or None,          # mot de passe de connexion (déchiffré)
+                ssh_key=vps.ssh_key or None,            # clé privée stockée en base (déchiffrée)
+                passphrase=config.SSH_PASSPHRASE or None,  # passphrase de la clé si besoin
             )
 
         # 3. Compter les lignes collectées depuis le CSV
