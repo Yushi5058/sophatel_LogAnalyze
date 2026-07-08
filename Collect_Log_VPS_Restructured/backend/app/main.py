@@ -10,6 +10,7 @@ from app.routers import auth_router
 from app.core.database import engine, Base, get_db
 from app.core.scheduler import scheduler, register_jobs
 from app.core.security import get_current_user
+from app.core.config import settings
 from app.core.ratelimit import limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
@@ -87,10 +88,10 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:4200", "http://127.0.0.1:4200"],
+    allow_origins=settings.CORS_ORIGINS,                       # configurable via CORS_ORIGINS
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], # méthodes réellement utilisées
+    allow_headers=["Authorization", "Content-Type"],           # en-têtes réellement utilisés
 )
 
 # Route d'authentification — SANS protection JWT
