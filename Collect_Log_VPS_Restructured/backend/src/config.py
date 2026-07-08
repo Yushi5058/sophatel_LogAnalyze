@@ -13,10 +13,8 @@ load_dotenv(ROOT / ".env")
 
 
 class AppConfig:
-    """Configuration globale de l'application"""
-
-    # PostgreSQL
-    DATABASE_URL = os.getenv("DATABASE_URL")
+    """Configuration du sous-système collecte/analyse (chemins, mode, SSH).
+    La connexion DB est centralisée dans app.core.config / app.core.database."""
 
     # Chemins
     LOG_DIR:  Path = ROOT / os.getenv("LOG_DIR", "logs")
