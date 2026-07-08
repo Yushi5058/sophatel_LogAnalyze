@@ -21,3 +21,5 @@ python-jose[cryptography]==3.3.0
 # (passlib 1.7.4 abandonné et cassé avec bcrypt >= 4.1 — cf. audit #18)
 pwdlib[argon2,bcrypt]==0.3.0
 python-multipart==0.0.9
+# Limitation de débit (anti brute-force) sur /login
+slowapi==0.1.10
