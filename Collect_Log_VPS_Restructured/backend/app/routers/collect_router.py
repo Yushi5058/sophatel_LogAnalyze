@@ -4,12 +4,16 @@ Route POST /api/collect/{vps_id}
 Collecte les logs du VPS via SSH (ou mock) et les écrit en CSV.
 """
 
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import require_role
+from app.core.config import settings
 from app.models.models import VPSServer
+
+logger = logging.getLogger(__name__)
 
 # ── Import du runner ──────────────────────────────────────────────────────────
 import sys
@@ -78,7 +82,11 @@ def collect_logs(vps_id: int, db: Session = Depends(get_db),
         raise HTTPException(status_code=422, detail=str(exc))
 
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erreur collecte SSH pour '{vps.name}' : {exc}"
+        # Détail complet en logs serveur ; message générique au client (sauf DEBUG).
+        logger.exception("Erreur collecte SSH pour '%s'", vps.name)
+        detail = (
+            f"Erreur collecte pour '{vps.name}' : {exc}"
+            if settings.DEBUG
+            else f"Erreur interne lors de la collecte pour '{vps.name}'."
         )
+        raise HTTPException(status_code=500, detail=detail)
