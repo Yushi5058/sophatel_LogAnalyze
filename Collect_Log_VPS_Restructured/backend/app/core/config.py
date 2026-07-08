@@ -13,6 +13,13 @@ class Settings:
     LOG_DIR: str     = os.getenv("LOG_DIR", "logs")
     DATA_DIR: str    = os.getenv("DATA_DIR", "data")
 
+    # Origines autorisées pour CORS (liste séparée par des virgules dans l'env)
+    CORS_ORIGINS: list = [
+        o.strip() for o in os.getenv(
+            "CORS_ORIGINS", "http://localhost:4200,http://127.0.0.1:4200"
+        ).split(",") if o.strip()
+    ]
+
     def __init__(self):
         # Validation fail-fast, mais via exception (rattrapable par les tests /
         # Alembic / l'outillage) plutôt que sys.exit() à l'import.
