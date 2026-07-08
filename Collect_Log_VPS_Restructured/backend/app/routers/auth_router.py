@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import verify_password, create_access_token
+from app.core.ratelimit import limiter
 from app.models.models import User
 from app.schemas.schemas import Token
 
@@ -14,7 +15,9 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8  # 8 heures
 
 
 @router.post("/login", response_model=Token)
+@limiter.limit("5/minute")          # anti brute-force : 5 tentatives/min par IP
 def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):

@@ -10,6 +10,9 @@ from app.routers import auth_router
 from app.core.database import engine, Base, get_db
 from app.core.scheduler import scheduler, register_jobs
 from app.core.security import get_current_user
+from app.core.ratelimit import limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -77,6 +80,10 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Limitation de débit (anti brute-force) — renvoie 429 au-delà du seuil
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
