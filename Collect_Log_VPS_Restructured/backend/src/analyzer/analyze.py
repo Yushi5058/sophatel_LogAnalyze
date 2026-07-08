@@ -14,24 +14,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from dotenv import load_dotenv
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
-load_dotenv()
-
 # ── Import des modèles ────────────────────────────────────────────────────────
 # Ajout du dossier backend au path pour importer les modèles
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from app.models.models import Base, VPSServer, LogCollection, LogEntry, LogSummary  # noqa: E402
+from app.models.models import VPSServer, LogCollection, LogEntry, LogSummary  # noqa: E402
+# Connexion DB centralisée : une seule source de DATABASE_URL (cf. app.core.config),
+# plus de moteur ni de défaut divergent ici.
+from app.core.database import engine, Base, SessionLocal as Session  # noqa: E402
 
-# ── Connexion DB ───────────────────────────────────────────────────────────────
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://sophatel:sophatel@localhost:5432/sophatel_v2")
-engine = create_engine(DATABASE_URL)
 Base.metadata.create_all(bind=engine)
-Session = sessionmaker(bind=engine)
 
 
 # ── Parsing ───────────────────────────────────────────────────────────────────
