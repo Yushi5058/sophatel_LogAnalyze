@@ -4,12 +4,16 @@ Route POST /api/analyze/{vps_id}
 Trouve le dernier CSV collecté pour ce VPS et le passe à l'analyseur.
 """
 
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import require_role
+from app.core.config import settings
 from app.models.models import VPSServer
+
+logger = logging.getLogger(__name__)
 
 # ── Import de l'analyseur ─────────────────────────────────────────────────────
 import sys
@@ -69,7 +73,11 @@ def analyze_logs(vps_id: int, db: Session = Depends(get_db),
         raise  # laisser passer les 404 explicites
 
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erreur analyse pour '{vps.name}' : {exc}"
+        # Détail complet en logs serveur ; message générique au client (sauf DEBUG).
+        logger.exception("Erreur analyse pour '%s'", vps.name)
+        detail = (
+            f"Erreur analyse pour '{vps.name}' : {exc}"
+            if settings.DEBUG
+            else f"Erreur interne lors de l'analyse pour '{vps.name}'."
         )
+        raise HTTPException(status_code=500, detail=detail)
