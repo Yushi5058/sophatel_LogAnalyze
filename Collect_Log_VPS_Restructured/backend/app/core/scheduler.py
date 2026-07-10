@@ -21,9 +21,32 @@ from apscheduler.triggers.cron import CronTrigger
 ROOT = Path(__file__).resolve().parents[3]   # racine du projet
 sys.path.insert(0, str(ROOT))
 
-from src.config import config, load_vps_inventory
+from src.config import config
 from src.collector.runner import run_collection
 from src.analyzer.analyze import run_analysis        # à créer (voir ci-dessous)
+
+
+def _load_vps_from_db() -> list[dict]:
+    """Inventaire des VPS depuis la base (source de vérité de l'UI/API)."""
+    from app.core.database import SessionLocal
+    from app.models.models import VPSServer
+
+    db = SessionLocal()
+    try:
+        return [
+            {
+                "name": v.name,
+                "host": v.host,
+                "user": v.user,
+                "port": v.port or 22,
+                "log_path": v.log_path or "/var/log/nginx/access.log",
+                "password": v.password or None,   # déchiffré par l'ORM (RM-06)
+                "ssh_key": v.ssh_key or None,
+            }
+            for v in db.query(VPSServer).all()
+        ]
+    finally:
+        db.close()
 
 logger = logging.getLogger("scheduler")
 
@@ -33,10 +56,13 @@ scheduler = AsyncIOScheduler(timezone="Africa/Casablanca")
 
 # ── Tâche 1 : Collecte des logs ───────────────────────────────────────────────
 async def job_collect():
-    """Récupère les logs de tous les VPS définis dans config/vps.yaml."""
+    """Récupère les logs de tous les VPS enregistrés en base (via l'UI/API)."""
     logger.info("[Scheduler] Démarrage de la collecte...")
     try:
-        vps_list = load_vps_inventory()
+        vps_list = _load_vps_from_db()
+        if not vps_list:
+            logger.info("[Scheduler] Aucun VPS en base — collecte ignorée.")
+            return
         results = run_collection(vps_list, use_mock=config.USE_MOCK)
         ok  = [r["vps"] for r in results if r["ok"]]
         nok = [r["vps"] for r in results if not r["ok"]]
