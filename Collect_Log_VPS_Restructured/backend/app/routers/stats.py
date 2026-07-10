@@ -40,20 +40,22 @@ def global_stats(vps_id: Optional[int] = None, db: Session = Depends(get_db)):
         col_ids2 = db.query(LogCollection.id).filter(LogCollection.vps_id == vps_id).subquery()
         eq = eq.filter(LogEntry.collection_id.in_(col_ids2))
 
-    # Moyenne
-    avg_latency_s = eq.with_entities(func.avg(LogEntry.response_time)).scalar()
-    avg_latency   = round(avg_latency_s * 1000, 1) if avg_latency_s else None  # secondes → ms
+    # Moyenne + percentiles calculés côté PostgreSQL (percentile_cont),
+    # sans charger toutes les latences en mémoire.
+    avg_s, p50_s, p95_s, p99_s = eq.with_entities(
+        func.avg(LogEntry.response_time),
+        func.percentile_cont(0.50).within_group(LogEntry.response_time.asc()),
+        func.percentile_cont(0.95).within_group(LogEntry.response_time.asc()),
+        func.percentile_cont(0.99).within_group(LogEntry.response_time.asc()),
+    ).one()
 
-    # Percentiles via sous-requête ordonnée (PostgreSQL)
-    rts = [r[0] for r in eq.with_entities(LogEntry.response_time).order_by(LogEntry.response_time).all()]
-    def percentile(data, p):
-        if not data: return None
-        idx = max(0, int(len(data) * p / 100) - 1)
-        return round(data[idx] * 1000, 1)
+    def _ms(v):
+        return round(v * 1000, 1) if v is not None else None  # secondes → ms
 
-    p50 = percentile(rts, 50)
-    p95 = percentile(rts, 95)
-    p99 = percentile(rts, 99)
+    avg_latency = _ms(avg_s)
+    p50 = _ms(p50_s)
+    p95 = _ms(p95_s)
+    p99 = _ms(p99_s)
 
     # ── Taux 4xx et 5xx ───────────────────────────────────────────────────────
     eq2 = db.query(LogEntry)
@@ -134,38 +136,38 @@ def endpoints_stats(limit: int = 10, vps_id: Optional[int] = None, db: Session =
         col_ids = db.query(LogCollection.id).filter(LogCollection.vps_id == vps_id).subquery()
         q = q.filter(LogEntry.collection_id.in_(col_ids))
 
-    # Récupérer tous les chemins distincts avec leurs entrées
-    from collections import defaultdict
-    path_data = defaultdict(list)
-    for entry in q.with_entities(
-        LogEntry.path, LogEntry.response_time, LogEntry.status
-    ).all():
-        path_data[entry[0]].append((entry[1], entry[2]))
+    # Agrégation par chemin côté PostgreSQL (comptage, taux d'erreur, percentiles).
+    rows = (
+        q.with_entities(
+            LogEntry.path.label("path"),
+            func.count(LogEntry.id).label("requests"),
+            func.sum(case((LogEntry.status >= 400, 1), else_=0)).label("errors"),
+            func.avg(LogEntry.response_time).label("avg_rt"),
+            func.percentile_cont(0.95).within_group(LogEntry.response_time.asc()).label("p95"),
+            func.percentile_cont(0.99).within_group(LogEntry.response_time.asc()).label("p99"),
+            func.max(LogEntry.response_time).label("max_rt"),
+        )
+        .group_by(LogEntry.path)
+        .order_by(func.count(LogEntry.id).desc())
+        .limit(limit)
+        .all()
+    )
 
-    results = []
-    for path, rows in path_data.items():
-        total = len(rows)
-        errors = sum(1 for _, s in rows if s and s >= 400)
-        rts = sorted(r for r, _ in rows if r is not None)
+    def _ms(v):
+        return round(v * 1000, 1) if v is not None else None
 
-        def pct(data, p):
-            if not data: return None
-            idx = max(0, int(len(data) * p / 100) - 1)
-            return round(data[idx] * 1000, 1)
-
-        avg_rt = round(sum(rts) / len(rts) * 1000, 1) if rts else None
-        results.append({
-            "path":        path,
-            "requests":    total,
-            "error_rate":  round(errors / total * 100, 1) if total else 0.0,
-            "avg_latency": avg_rt,
-            "p95_latency": pct(rts, 95),
-            "p99_latency": pct(rts, 99),
-            "max_latency": round(rts[-1] * 1000, 1) if rts else None,
-        })
-
-    results.sort(key=lambda x: -x["requests"])
-    return results[:limit]
+    return [
+        {
+            "path":        r.path,
+            "requests":    r.requests,
+            "error_rate":  round((r.errors or 0) / r.requests * 100, 1) if r.requests else 0.0,
+            "avg_latency": _ms(r.avg_rt),
+            "p95_latency": _ms(r.p95),
+            "p99_latency": _ms(r.p99),
+            "max_latency": _ms(r.max_rt),
+        }
+        for r in rows
+    ]
 
 
 @router.get("/alerts")
@@ -197,16 +199,16 @@ def get_alerts(vps_id: Optional[int] = None, db: Session = Depends(get_db)):
     total_err = sq.with_entities(func.sum(LogSummary.error_count)).scalar() or 0
     error_rate = round(total_err / total_req * 100, 1) if total_req else 0
 
-    rts = sorted(
-        r[0] for r in q.filter(LogEntry.response_time.isnot(None))
-                        .with_entities(LogEntry.response_time).all()
+    # Percentiles calculés côté PostgreSQL (pas de chargement en mémoire)
+    p95_s, p99_s = (
+        q.filter(LogEntry.response_time.isnot(None))
+         .with_entities(
+             func.percentile_cont(0.95).within_group(LogEntry.response_time.asc()),
+             func.percentile_cont(0.99).within_group(LogEntry.response_time.asc()),
+         ).one()
     )
-    def pct(data, p):
-        if not data: return 0
-        return round(data[max(0, int(len(data) * p / 100) - 1)] * 1000, 1)
-
-    p95 = pct(rts, 95)
-    p99 = pct(rts, 99)
+    p95 = round(p95_s * 1000, 1) if p95_s is not None else 0
+    p99 = round(p99_s * 1000, 1) if p99_s is not None else 0
 
     now = "maintenant"
     alerts = []
