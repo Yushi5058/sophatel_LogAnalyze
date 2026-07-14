@@ -4,7 +4,7 @@ backend/app/services/endpoint_stats_service.py
 Calcule et insère les statistiques par endpoint (EndpointStat)
 à partir des LogEntry d'une collection.
 
-Appelé par analyze_service.py après chaque collecte/analyse.
+Appelé par src/analyzer/analyze.py à la fin de chaque analyse.
 """
 import re
 from collections import defaultdict
