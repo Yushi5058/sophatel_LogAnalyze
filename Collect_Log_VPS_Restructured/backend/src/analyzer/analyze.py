@@ -8,21 +8,16 @@ Point d'entrée de l'analyseur.
 
 import csv
 import json
-import os
-import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-# ── Import des modèles ────────────────────────────────────────────────────────
-# Ajout du dossier backend au path pour importer les modèles
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "backend"))
-
-from app.models.models import VPSServer, LogCollection, LogEntry, LogSummary  # noqa: E402
+# Paquets `app` et `src` résolus depuis backend/ (répertoire de lancement,
+# ajouté au path par les points d'entrée : uvicorn, scripts/, alembic).
+from app.models.models import VPSServer, LogCollection, LogEntry, LogSummary
 # Connexion DB centralisée : une seule source de DATABASE_URL (cf. app.core.config),
 # plus de moteur ni de défaut divergent ici.
-from app.core.database import engine, Base, SessionLocal as Session  # noqa: E402
+from app.core.database import engine, Base, SessionLocal as Session
 
 Base.metadata.create_all(bind=engine)
 
@@ -167,8 +162,6 @@ def analyze_csv(csv_path: str, vps_name: str, mode: str = "ssh") -> dict:
 
         # ── Calcul des stats par endpoint ─────────────────────────────────
         try:
-            import sys as _sys
-            _sys.path.insert(0, str(ROOT / "backend"))
             from app.services.endpoint_stats_service import compute_endpoint_stats
             nb_endpoints = compute_endpoint_stats(collection.id, db)
             db.commit()
