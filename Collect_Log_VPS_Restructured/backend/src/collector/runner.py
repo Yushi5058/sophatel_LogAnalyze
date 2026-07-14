@@ -4,6 +4,7 @@ Orchestre la collecte des logs (mock ou SSH) et écrit les fichiers
 .log et .csv dans logs/<vps>/.
 """
 import csv
+import logging
 import re
 from datetime import datetime
 from pathlib import Path
@@ -13,29 +14,36 @@ from src.collector.mock import generate_mock_log_lines
 from src.collector.ssh_client import SSHClient
 from src.config import config
 
-# Regex Combined Log Format Nginx
-# ip - - [timestamp] "method path proto" status size "referrer" "ua" [resp_time]
-_LOG_RE = re.compile(
+logger = logging.getLogger("collector")
+
+# Partie commune : ip - - [ts] "method path proto" status size "referrer" "ua"
+_HEAD = (
     r'(?P<ip>\S+) \S+ \S+ \[(?P<ts>[^\]]+)\] '
     r'"(?P<method>\S+) (?P<path>\S+) \S+" '
     r'(?P<status>\d{3}) (?P<size>\d+|-) '
     r'"(?P<referrer>[^"]*)" "(?P<ua>[^"]*)"'
-    r'(?:\s+(?P<resp_time>[\d.]+))?'
 )
-# LINE_RE = re.compile(
-#     r'^(?P<ip>\S+)\s+\S+\s+\S+\s+\[(?P<ts>[^\]]+)\]\s+'
-#     r'"(?P<method>GET|HEAD|OPTIONS|TRACE|PUT|DELETE|POST|PATCH|CONNECT)?\s*(?P<target>[^" ]*)\s*(?P<protocol>[^"]*)"\s+'
-#     r'(?P<status>\d{3})\s+(?P<body_bytes>\d+)\s+'
-#     r'"(?P<referer>[^"]*)"\s+"(?P<ua>[^"]*)"\s+"(?P<xff>[^"]*)"\s+'
-#     r'(?P<request_time>[\d\.]+)\s+(?P<upstream_time>[-\d\.,]+)\s*'
-#     r'(?P<frontend_version>V([\d.]*|-))?$'
-# )
+
+# Format "combined" simple (+ temps de réponse optionnel) — produit par le mock.
+_LOG_RE = re.compile(_HEAD + r'(?:\s+(?P<resp_time>[\d.]+))?\s*$')
+
+# Format étendu Sophatel : + "xff" request_time upstream_time [Vversion].
+# On capture request_time comme response_time (le vrai temps de traitement) ;
+# upstream_time et version frontend (formats variés : "0.01, 0.02", "-", "V-"…) sont ignorés.
+_LOG_RE_EXT = re.compile(
+    _HEAD +
+    r' "(?P<xff>[^"]*)" '
+    r'(?P<resp_time>[\d.]+)'
+    r'(?: .*)?$'
+)
+
 CSV_HEADERS = ["ip", "timestamp", "method", "path", "status", "size", "referrer", "user_agent", "response_time"]
 
 
 def _parse_line(line: str) -> Optional[dict]:
-    """Parse une ligne Nginx Combined Log Format → dict ou None si invalide."""
-    m = _LOG_RE.match(line.strip())
+    """Parse une ligne Nginx (format étendu Sophatel ou combined simple) → dict ou None."""
+    line = line.strip()
+    m = _LOG_RE_EXT.match(line) or _LOG_RE.match(line)
     if not m:
         return None
     size = m.group("size")
@@ -68,17 +76,24 @@ def _write_outputs(vps_name: str, lines: list[str]) -> tuple[Path, Path]:
     log_path.write_text("\n".join(lines), encoding="utf-8")
 
     # Fichier .csv parsé
-    parsed = [_parse_line(l) for l in lines if l.strip()]
-    parsed = [p for p in parsed if p is not None]
+    non_empty = [l for l in lines if l.strip()]
+    parsed = [p for p in (_parse_line(l) for l in non_empty) if p is not None]
+    n_in, n_ok = len(non_empty), len(parsed)
+    n_ko = n_in - n_ok
 
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
         writer.writeheader()
         writer.writerows(parsed)
 
-    print(f"  ✓ {vps_name} → {len(lines)} lignes brutes, {len(parsed)} entrées parsées")
-    print(f"    LOG : {log_path}")
-    print(f"    CSV : {csv_path}")
+    logger.info("%s : %d lignes brutes, %d parsées, %d ignorées", vps_name, len(lines), n_ok, n_ko)
+    # Rend visible un format de log inattendu (échec silencieux) plutôt que 0 entrée sans alerte.
+    if n_in and n_ko / n_in > 0.10:
+        logger.warning(
+            "%s : %.0f%% de lignes non parsées (%d/%d) — format de log Nginx inattendu ?",
+            vps_name, 100 * n_ko / n_in, n_ko, n_in,
+        )
+    print(f"  {vps_name} -> {len(lines)} lignes brutes, {n_ok} parsees, {n_ko} ignorees")
     return log_path, csv_path
 
 
