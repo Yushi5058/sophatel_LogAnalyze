@@ -10,17 +10,12 @@ Installation :
 """
 
 import logging
-import sys
-from pathlib import Path
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
 
-# ── Imports internes ──────────────────────────────────────────────────────────
-ROOT = Path(__file__).resolve().parents[3]   # racine du projet
-sys.path.insert(0, str(ROOT))
-
+# Paquets `app` et `src` résolus depuis backend/ (répertoire de lancement de l'API)
 from src.config import config
 from src.collector.runner import run_collection
 from src.analyzer.analyze import run_analysis        # à créer (voir ci-dessous)

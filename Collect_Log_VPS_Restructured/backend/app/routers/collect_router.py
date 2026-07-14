@@ -15,11 +15,7 @@ from app.models.models import VPSServer
 
 logger = logging.getLogger(__name__)
 
-# ── Import du runner ──────────────────────────────────────────────────────────
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
-
+# Paquets `app` et `src` résolus depuis backend/ (répertoire de lancement de l'API)
 from src.collector.runner import collect_ssh, collect_mock
 from src.config import config
 

@@ -5,6 +5,8 @@ Trouve le dernier CSV collecté pour ce VPS et le passe à l'analyseur.
 """
 
 import logging
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -13,15 +15,11 @@ from app.core.security import require_role
 from app.core.config import settings
 from app.models.models import VPSServer
 
-logger = logging.getLogger(__name__)
-
-# ── Import de l'analyseur ─────────────────────────────────────────────────────
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
-
+# Paquets `app` et `src` résolus depuis backend/ (répertoire de lancement de l'API)
 from src.analyzer.analyze import analyze_csv
 from src.config import config
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
