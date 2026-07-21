@@ -7,10 +7,13 @@ Point d'entrée de l'analyseur.
 """
 
 import csv
+import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 # Paquets `app` et `src` résolus depuis backend/ (répertoire de lancement,
 # ajouté au path par les points d'entrée : uvicorn, scripts/, alembic).
@@ -20,6 +23,16 @@ from app.models.models import VPSServer, LogCollection, LogEntry, LogSummary
 from app.core.database import engine, Base, SessionLocal as Session
 
 Base.metadata.create_all(bind=engine)
+
+# Champs bruts (dans l'ordre) servant d'empreinte de déduplication d'une ligne.
+_HASH_FIELDS = ["ip", "timestamp", "method", "path", "status", "size",
+                "referrer", "user_agent", "response_time"]
+
+
+def _line_hash(row: dict) -> str:
+    """Empreinte md5 des valeurs BRUTES du CSV : clé naturelle d'une ligne de log."""
+    raw = "\x1f".join(row.get(k, "") or "" for k in _HASH_FIELDS)
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()
 
 
 # ── Parsing ───────────────────────────────────────────────────────────────────
@@ -66,8 +79,10 @@ def analyze_csv(csv_path: str, vps_name: str, mode: str = "ssh") -> dict:
 
     db = Session()
     try:
-        # 1. Récupérer ou créer le VPS
-        vps = db.query(VPSServer).filter(VPSServer.name == vps_name).first()
+        # 1. Récupérer ou créer le VPS (uniquement parmi les VPS actifs)
+        vps = db.query(VPSServer).filter(
+            VPSServer.name == vps_name, VPSServer.deleted_at.is_(None)
+        ).first()
         if not vps:
             vps = VPSServer(name=vps_name, host=vps_name, user="unknown")
             db.add(vps)
@@ -82,8 +97,54 @@ def analyze_csv(csv_path: str, vps_name: str, mode: str = "ssh") -> dict:
         db.add(collection)
         db.flush()
 
-        # 3. Parser et insérer les entrées
-        entries = []
+        # 3. Parser les lignes + empreinte de déduplication (doublons intra-fichier écartés)
+        parsed_rows = []
+        seen_hashes: set[str] = set()
+        with open(csv_path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                h = _line_hash(row)
+                if h in seen_hashes:
+                    continue
+                seen_hashes.add(h)
+                parsed_rows.append({
+                    "collection_id": collection.id,
+                    "vps_id":        vps.id,
+                    "line_hash":     h,
+                    "ip":            row.get("ip", "").strip() or None,
+                    "timestamp":     parse_timestamp(row.get("timestamp", "")),
+                    "method":        (row.get("method", "").strip().upper() or None),
+                    "path":          row.get("path", "").strip() or None,
+                    "status":        parse_status(row.get("status", "")),
+                    "size":          parse_size(row.get("size", "0")),
+                    "referrer":      row.get("referrer", "").strip() or None,
+                    "user_agent":    row.get("user_agent", "").strip() or None,
+                    "response_time": parse_resp_time(row.get("response_time", "")),
+                })
+
+        # 4. Écarter les lignes déjà présentes pour ce VPS (déduplication inter-collectes)
+        existing: set[str] = set()
+        all_hashes = [r["line_hash"] for r in parsed_rows]
+        for i in range(0, len(all_hashes), 5000):
+            chunk = all_hashes[i:i + 5000]
+            existing.update(
+                r[0] for r in db.query(LogEntry.line_hash).filter(
+                    LogEntry.vps_id == vps.id, LogEntry.line_hash.in_(chunk)
+                ).all()
+            )
+        new_rows = [r for r in parsed_rows if r["line_hash"] not in existing]
+        duplicates = len(parsed_rows) - len(new_rows)
+
+        # 5. Insertion en base (ON CONFLICT DO NOTHING = filet anti-course)
+        for i in range(0, len(new_rows), 5000):
+            db.execute(
+                pg_insert(LogEntry)
+                .values(new_rows[i:i + 5000])
+                .on_conflict_do_nothing(index_elements=["vps_id", "line_hash"])
+            )
+        collection.total_lines = len(new_rows)
+
+        # 6. Agrégats calculés sur les lignes RÉELLEMENT nouvelles (résumé non gonflé)
         ip_set  = set()
         status_dist: dict[int, int] = {}
         path_count:  dict[str, int] = {}
@@ -93,65 +154,33 @@ def analyze_csv(csv_path: str, vps_name: str, mode: str = "ssh") -> dict:
         rt_count    = 0
         error_count = 0
         success_count = 0
+        for r in new_rows:
+            if r["ip"]:
+                ip_set.add(r["ip"])
+                ip_count[r["ip"]] = ip_count.get(r["ip"], 0) + 1
+            if r["status"]:
+                status_dist[r["status"]] = status_dist.get(r["status"], 0) + 1
+                if r["status"] >= 400:
+                    error_count += 1
+                else:
+                    success_count += 1
+            if r["path"]:
+                path_count[r["path"]] = path_count.get(r["path"], 0) + 1
+            total_size += r["size"]
+            if r["response_time"] is not None:
+                total_rt += r["response_time"]
+                rt_count += 1
 
-        with open(csv_path, newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                ip        = row.get("ip", "").strip()
-                timestamp = parse_timestamp(row.get("timestamp", ""))
-                method    = row.get("method", "").strip().upper()
-                path      = row.get("path", "").strip()
-                status    = parse_status(row.get("status", ""))
-                size      = parse_size(row.get("size", "0"))
-                referrer  = row.get("referrer", "").strip()
-                user_agent= row.get("user_agent", "").strip()
-                resp_time = parse_resp_time(row.get("response_time", ""))
-
-                entry = LogEntry(
-                    collection_id=collection.id,
-                    ip=ip or None,
-                    timestamp=timestamp,
-                    method=method or None,
-                    path=path or None,
-                    status=status,
-                    size=size,
-                    referrer=referrer or None,
-                    user_agent=user_agent or None,
-                    response_time=resp_time,
-                )
-                entries.append(entry)
-
-                # Agrégats
-                if ip:
-                    ip_set.add(ip)
-                    ip_count[ip] = ip_count.get(ip, 0) + 1
-                if status:
-                    status_dist[status] = status_dist.get(status, 0) + 1
-                    if status >= 400:
-                        error_count += 1
-                    else:
-                        success_count += 1
-                if path:
-                    path_count[path] = path_count.get(path, 0) + 1
-                total_size += size
-                if resp_time is not None:
-                    total_rt += resp_time
-                    rt_count += 1
-
-        db.bulk_save_objects(entries)
-        collection.total_lines = len(entries)
-
-        # 4. Résumé
         top_paths = sorted(path_count.items(), key=lambda x: x[1], reverse=True)[:10]
         top_ips   = sorted(ip_count.items(),   key=lambda x: x[1], reverse=True)[:10]
 
         summary = LogSummary(
             collection_id=collection.id,
-            total_requests=len(entries),
+            total_requests=len(new_rows),
             unique_ips=len(ip_set),
             error_count=error_count,
             success_count=success_count,
-            avg_size=round(total_size / len(entries), 2) if entries else 0.0,
+            avg_size=round(total_size / len(new_rows), 2) if new_rows else 0.0,
             avg_resp_time=round(total_rt / rt_count, 4) if rt_count else 0.0,
             top_paths=json.dumps([{"path": p, "count": c} for p, c in top_paths]),
             top_ips=json.dumps([{"ip": ip, "count": c} for ip, c in top_ips]),
@@ -159,6 +188,8 @@ def analyze_csv(csv_path: str, vps_name: str, mode: str = "ssh") -> dict:
         )
         db.add(summary)
         db.commit()
+        if duplicates:
+            print(f"    {duplicates} ligne(s) déjà connue(s) ignorée(s) (déduplication)")
 
         # ── Calcul des stats par endpoint ─────────────────────────────────
         try:
@@ -173,11 +204,12 @@ def analyze_csv(csv_path: str, vps_name: str, mode: str = "ssh") -> dict:
             "collection_id": collection.id,
             "vps": vps_name,
             "file": str(csv_path),
-            "total_requests": len(entries),
+            "total_requests": len(new_rows),
             "unique_ips": len(ip_set),
             "error_count": error_count,
             "success_count": success_count,
-            "error_rate": round(error_count / len(entries) * 100, 2) if entries else 0.0,
+            "duplicates_skipped": duplicates,
+            "error_rate": round(error_count / len(new_rows) * 100, 2) if new_rows else 0.0,
         }
         print(f"[✓] Analyse terminée → collection #{collection.id}")
         print(f"    {result['total_requests']} requêtes | {result['unique_ips']} IPs uniques | "

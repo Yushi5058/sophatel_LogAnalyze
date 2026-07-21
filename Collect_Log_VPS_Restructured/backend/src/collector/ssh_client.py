@@ -167,6 +167,43 @@ class SSHClient:
         lines = data.decode("utf-8", errors="replace").splitlines()
         return "\n".join(lines[-n:])
 
+    def fetch_incremental(
+        self, remote_path: str, offset: int = 0, n: int = 50_000
+    ) -> tuple[str, int]:
+        """
+        Collecte incrémentale : ne récupère que le **nouveau** contenu depuis
+        `offset` (position en octets déjà lue), pour éviter de recollecter les
+        mêmes lignes à chaque passage (fenêtre glissante → duplication).
+
+        Retourne `(texte, nouvel_offset)` :
+        - `0 < offset <= taille` : lit `[offset, taille)`. On s'arrête au dernier
+          saut de ligne pour ne pas couper une ligne en cours d'écriture ; le
+          nouvel offset pointe juste après.
+        - `offset == 0` (première collecte) ou `offset > taille` (rotation /
+          troncature du fichier détectée) : repli sur les `n` dernières lignes
+          (mémoire bornée), nouvel offset = taille du fichier.
+        """
+        if not self._client:
+            raise RuntimeError("SSHClient non connecté.")
+
+        with self._client.open_sftp() as sftp:
+            size = sftp.stat(remote_path).st_size
+            if 0 < offset <= size:
+                if offset == size:
+                    return "", size  # rien de nouveau
+                with sftp.file(remote_path, "rb") as f:
+                    f.seek(offset)
+                    data = f.read(size - offset)
+                nl = data.rfind(b"\n")
+                if nl == -1:
+                    return "", offset  # pas encore de ligne complète
+                text = data[: nl + 1].decode("utf-8", errors="replace")
+                return text, offset + nl + 1
+
+        # Première collecte ou rotation : repli sur le tail (borne mémoire).
+        text = self.fetch_last_n_lines(remote_path, n=n)
+        return text, size
+
     def close(self) -> None:
         """Ferme la connexion SSH."""
         if self._client:

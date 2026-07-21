@@ -30,6 +30,9 @@ class VPSServer(Base):
     ssh_key    = Column(EncryptedText, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     deleted_at = Column(DateTime(timezone=True), nullable=True)  # suppression logique (soft delete)
+    # Curseur de collecte incrémentale : position (octets) déjà lue dans le
+    # fichier de logs distant, pour ne récupérer que le nouveau contenu.
+    collect_offset = Column(BigInteger, nullable=False, server_default="0", default=0)
 
     collections = relationship(
         "LogCollection", back_populates="vps",
@@ -62,9 +65,18 @@ class LogCollection(Base):
 class LogEntry(Base):
     """Entrée individuelle de log Nginx parsée"""
     __tablename__ = "log_entries"
+    # Unicité du contenu par VPS : empêche la réinsertion d'une même ligne
+    # collectée dans deux fenêtres qui se chevauchent (déduplication).
+    __table_args__ = (
+        Index("uq_log_entries_vps_hash", "vps_id", "line_hash", unique=True),
+    )
 
     id            = Column(BigInteger, primary_key=True, index=True)
     collection_id = Column(Integer, ForeignKey("log_collections.id", ondelete="CASCADE"), nullable=False)
+    # Dénormalisé depuis la collection pour porter l'unicité du contenu par VPS.
+    vps_id        = Column(Integer, ForeignKey("vps_servers.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Empreinte md5 des champs bruts de la ligne (clé naturelle de déduplication).
+    line_hash     = Column(String(32), nullable=False)
     ip            = Column(String(45))
     timestamp     = Column(DateTime(timezone=True))
     method        = Column(String(10))
