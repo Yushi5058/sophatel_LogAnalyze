@@ -33,7 +33,7 @@ def collect_logs(vps_id: int, db: Session = Depends(get_db),
     try:
         # 2. Collecte mock ou SSH selon config
         if config.USE_MOCK:
-            log_path, csv_path = collect_mock(vps_name=vps.name)
+            log_path, csv_path, new_offset = collect_mock(vps_name=vps.name)
         else:
             # Vérifications obligatoires
             if not vps.host:
@@ -44,7 +44,7 @@ def collect_logs(vps_id: int, db: Session = Depends(get_db),
                     "Modifiez le VPS et renseignez un utilisateur SSH valide."
                 )
 
-            log_path, csv_path = collect_ssh(
+            log_path, csv_path, new_offset = collect_ssh(
                 vps_name=vps.name,
                 host=vps.host,
                 user=vps.user,
@@ -56,11 +56,17 @@ def collect_logs(vps_id: int, db: Session = Depends(get_db),
                 passphrase=config.SSH_PASSPHRASE or None,  # passphrase de la clé si besoin
                 known_hosts=config.SSH_KNOWN_HOSTS,        # vérif d'identité (anti-MITM)
                 strict_host_key=config.SSH_STRICT_HOST_KEY,
+                start_offset=vps.collect_offset or 0,      # curseur incrémental
             )
 
-        # 3. Compter les lignes collectées depuis le CSV
+        # 3. Persister le nouvel offset (seulement en SSH ; None en mock)
+        if new_offset is not None:
+            vps.collect_offset = new_offset
+            db.commit()
+
+        # 4. Compter les lignes collectées depuis le CSV (aucun CSV si rien de neuf)
         lines_collected = 0
-        if csv_path.exists():
+        if csv_path is not None and csv_path.exists():
             with open(csv_path, encoding="utf-8") as f:
                 # -1 pour exclure l'en-tête CSV
                 lines_collected = max(0, sum(1 for _ in f) - 1)
@@ -69,8 +75,8 @@ def collect_logs(vps_id: int, db: Session = Depends(get_db),
             "success": True,
             "message": f"Collecte terminée pour {vps.name}",
             "lines_collected": lines_collected,
-            "csv_path": str(csv_path),
-            "log_path": str(log_path),
+            "csv_path": str(csv_path) if csv_path else None,
+            "log_path": str(log_path) if log_path else None,
         }
 
     except ValueError as exc:

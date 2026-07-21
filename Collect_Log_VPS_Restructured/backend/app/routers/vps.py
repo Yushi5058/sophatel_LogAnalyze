@@ -79,7 +79,11 @@ def update_vps(vps_id: int, payload: VPSUpdate, db: Session = Depends(get_db),
         )
         if conflict:
             raise HTTPException(status_code=409, detail=f"VPS '{payload.name}' déjà enregistré")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    # Changer le fichier de logs invalide le curseur incrémental : on repart de 0.
+    if "log_path" in data and data["log_path"] != vps.log_path:
+        vps.collect_offset = 0
+    for field, value in data.items():
         setattr(vps, field, value)
     db.commit()
     db.refresh(vps)

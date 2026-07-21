@@ -97,11 +97,12 @@ def _write_outputs(vps_name: str, lines: list[str]) -> tuple[Path, Path]:
     return log_path, csv_path
 
 
-def collect_mock(vps_name: str, n_lines: int = 500) -> tuple[Path, Path]:
-    """Collecte en mode mock (génération aléatoire)."""
+def collect_mock(vps_name: str, n_lines: int = 500) -> tuple[Path, Path, Optional[int]]:
+    """Collecte en mode mock (génération aléatoire). Pas de curseur (offset None)."""
     print(f"[MOCK] Génération de {n_lines} lignes pour '{vps_name}'...")
     lines = generate_mock_log_lines(n_lines)
-    return _write_outputs(vps_name, lines)
+    log_p, csv_p = _write_outputs(vps_name, lines)
+    return log_p, csv_p, None
 
 
 def collect_ssh(
@@ -117,19 +118,31 @@ def collect_ssh(
     ssh_key: Optional[str] = None,
     known_hosts: str = "~/.ssh/known_hosts",
     strict_host_key: bool = False,
-) -> tuple[Path, Path]:
-    """Collecte réelle via SSH (clé fournie, clé locale, ou mot de passe)."""
+    start_offset: int = 0,
+) -> tuple[Optional[Path], Optional[Path], int]:
+    """
+    Collecte réelle via SSH (clé fournie, clé locale, ou mot de passe).
+
+    Collecte **incrémentale** : ne récupère que le contenu ajouté depuis
+    `start_offset` (curseur d'octets). Retourne `(log_path, csv_path, new_offset)`.
+    Si aucun nouveau contenu : `(None, None, new_offset)` (pas de CSV écrit).
+    """
     print(f"[SSH] Connexion à {user}@{host}:{port}...")
     with SSHClient(
         host=host, user=user, port=port, key_path=key_path,
         passphrase=passphrase, password=password, ssh_key=ssh_key,
         known_hosts=known_hosts, strict_host_key=strict_host_key,
     ) as ssh:
-        print(f"[SSH] Lecture de '{log_path}' (dernières {last_n} lignes)...")
-        content = ssh.fetch_last_n_lines(log_path, n=last_n)
+        print(f"[SSH] Lecture incrémentale de '{log_path}' (offset={start_offset})...")
+        content, new_offset = ssh.fetch_incremental(log_path, offset=start_offset, n=last_n)
 
     lines = [l for l in content.splitlines() if l.strip()]
-    return _write_outputs(vps_name, lines)
+    if not lines:
+        print(f"  {vps_name} -> aucun nouveau contenu (offset inchangé)")
+        return None, None, new_offset
+
+    log_p, csv_p = _write_outputs(vps_name, lines)
+    return log_p, csv_p, new_offset
 
 
 def run_collection(vps_list: list[dict], use_mock: bool = False) -> list[dict]:
@@ -142,9 +155,9 @@ def run_collection(vps_list: list[dict], use_mock: bool = False) -> list[dict]:
         name = vps.get("name", "unknown")
         try:
             if use_mock or config.USE_MOCK:
-                log_p, csv_p = collect_mock(name)
+                log_p, csv_p, new_offset = collect_mock(name)
             else:
-                log_p, csv_p = collect_ssh(
+                log_p, csv_p, new_offset = collect_ssh(
                     vps_name=name,
                     host=vps["host"],
                     user=vps["user"],
@@ -156,8 +169,15 @@ def run_collection(vps_list: list[dict], use_mock: bool = False) -> list[dict]:
                     passphrase=config.SSH_PASSPHRASE or None,
                     known_hosts=config.SSH_KNOWN_HOSTS,
                     strict_host_key=config.SSH_STRICT_HOST_KEY,
+                    start_offset=vps.get("collect_offset", 0) or 0,
                 )
-            results.append({"vps": name, "log_path": str(log_p), "csv_path": str(csv_p), "ok": True})
+            results.append({
+                "vps": name,
+                "log_path": str(log_p) if log_p else None,
+                "csv_path": str(csv_p) if csv_p else None,
+                "new_offset": new_offset,   # None en mock ; sinon curseur à persister
+                "ok": True,
+            })
         except Exception as e:
             print(f"  ✗ {name} — Erreur : {e}")
             results.append({"vps": name, "error": str(e), "ok": False})

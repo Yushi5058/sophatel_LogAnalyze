@@ -37,11 +37,35 @@ def _load_vps_from_db() -> list[dict]:
                 "log_path": v.log_path or "/var/log/nginx/access.log",
                 "password": v.password or None,   # déchiffré par l'ORM (RM-06)
                 "ssh_key": v.ssh_key or None,
+                "collect_offset": v.collect_offset or 0,   # curseur incrémental
             }
             for v in db.query(VPSServer).filter(VPSServer.deleted_at.is_(None)).all()
         ]
     finally:
         db.close()
+
+def _persist_offsets(results: list[dict]) -> None:
+    """Enregistre le nouvel offset de collecte par VPS (curseur incrémental)."""
+    updates = [
+        (r["vps"], r["new_offset"])
+        for r in results
+        if r.get("ok") and r.get("new_offset") is not None
+    ]
+    if not updates:
+        return
+    from app.core.database import SessionLocal
+    from app.models.models import VPSServer
+
+    db = SessionLocal()
+    try:
+        for name, offset in updates:
+            db.query(VPSServer).filter(
+                VPSServer.name == name, VPSServer.deleted_at.is_(None)
+            ).update({VPSServer.collect_offset: offset}, synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()
+
 
 logger = logging.getLogger("scheduler")
 
@@ -59,6 +83,7 @@ async def job_collect():
             logger.info("[Scheduler] Aucun VPS en base — collecte ignorée.")
             return
         results = run_collection(vps_list, use_mock=config.USE_MOCK)
+        _persist_offsets(results)
         ok  = [r["vps"] for r in results if r["ok"]]
         nok = [r["vps"] for r in results if not r["ok"]]
         logger.info(f"[Scheduler] Collecte terminée — OK: {ok}  ERREUR: {nok}")
