@@ -53,6 +53,7 @@ class VPSUpdate(BaseModel):
 class VPSOut(VPSBase):
     id: int
     created_at: datetime
+    deleted_at: Optional[datetime] = None
     class Config:
         from_attributes = True
 

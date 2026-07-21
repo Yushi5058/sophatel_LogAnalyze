@@ -550,7 +550,10 @@ body.locked .app-shell{display:none}
   </div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
     <div class="sec-title" style="margin-bottom:0">Gestion des Sources de logs</div>
-    <button class="btn btn-primary" onclick="openVpsDialog()">+ Ajouter un VPS</button>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="btn btn-ghost" onclick="openVpsTrash()">🗑️ Corbeille</button>
+      <button class="btn btn-primary" onclick="openVpsDialog()">+ Ajouter un VPS</button>
+    </div>
   </div>
   <div class="card" style="padding:0;overflow:hidden;">
     <table class="ep-table" id="vpsTable" style="width:100%">
@@ -620,6 +623,18 @@ body.locked .app-shell{display:none}
     <div style="display:flex;justify-content:flex-end;gap:10px;">
       <button class="btn btn-ghost" onclick="closeDeleteDialog()">Annuler</button>
       <button class="btn" style="background:#c53030;color:#fff;border:none;" onclick="confirmDeleteVps()">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<!-- TRASH / RESTORE MODAL -->
+<div id="vpsTrashModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:28px 32px;width:560px;max-width:96vw;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+    <h3 style="margin:0 0 6px;font-size:17px;color:var(--brand);">🗑️ Corbeille des VPS</h3>
+    <p style="font-size:13px;color:var(--text2);margin:0 0 18px;">VPS supprimés — restaurez-les pour les réactiver.</p>
+    <div id="vpsTrashBody" style="max-height:50vh;overflow:auto;"></div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+      <button class="btn btn-ghost" onclick="closeVpsTrash()">Fermer</button>
     </div>
   </div>
 </div>
@@ -740,7 +755,11 @@ async function apiFetch(path, options = {}) {
   if (token) headers['Authorization'] = 'Bearer ' + token;
   const r = await fetch(API + path, { ...options, headers });
   if (r.status === 401) { doLogout(); throw new Error('Session expirée, veuillez vous reconnecter.'); }
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) {
+    let detail = `HTTP ${r.status}`;
+    try { const j = await r.json(); if (j && typeof j.detail === 'string') detail = j.detail; } catch(_) {}
+    throw new Error(detail);
+  }
   return r.json();
 }
 
@@ -1412,7 +1431,7 @@ async function submitVps() {
 
 function openDeleteVps(id, name) {
   vpsDeleteTarget = id;
-  document.getElementById('vpsDeleteMsg').textContent = 'Voulez-vous vraiment supprimer "' + name + '" ? Cette action est irréversible.';
+  document.getElementById('vpsDeleteMsg').textContent = 'Voulez-vous vraiment supprimer "' + name + '" ? Il sera déplacé dans la corbeille et pourra être restauré.';
   document.getElementById('vpsDeleteModal').style.display = 'flex';
 }
 
@@ -1422,13 +1441,56 @@ async function confirmDeleteVps() {
   if (!vpsDeleteTarget) return;
   try {
     await apiFetch('/vps/' + vpsDeleteTarget, { method:'DELETE' });
-    showVpsToast('🗑️ VPS supprimé.', 'success');
+    showVpsToast('🗑️ VPS déplacé dans la corbeille.', 'success');
     closeDeleteDialog();
     await loadVpsList();
     await loadVpsSelector();
   } catch(e) {
     showVpsToast('❌ Erreur : ' + e.message, 'error');
     closeDeleteDialog();
+  }
+}
+
+async function openVpsTrash() {
+  const body = document.getElementById('vpsTrashBody');
+  document.getElementById('vpsTrashModal').style.display = 'flex';
+  body.innerHTML = '<div style="text-align:center;padding:28px;color:var(--text3)"><div class="spinner" style="margin:0 auto 8px"></div>Chargement…</div>';
+  try {
+    const list = await apiFetch('/vps/deleted');
+    if (!list || list.length === 0) {
+      body.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text3);">La corbeille est vide.</div>';
+      return;
+    }
+    body.innerHTML = '<table class="ep-table" style="width:100%"><thead><tr><th>Nom</th><th>Hôte</th><th>Supprimé le</th><th></th></tr></thead><tbody>' +
+      list.map(v => `
+        <tr id="trash-row-${v.id}">
+          <td><strong>${esc(v.name)}</strong></td>
+          <td style="font-family:monospace;font-size:11px;color:var(--text3)">${esc(v.host)}</td>
+          <td style="font-size:12px;color:var(--text3)">${formatTimestamp(v.deleted_at)}</td>
+          <td style="text-align:right">
+            <button class="btn" style="font-size:11px;padding:4px 10px;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;" onclick="restoreVps(${v.id},'${esc(v.name)}')">♻️ Restaurer</button>
+          </td>
+        </tr>`).join('') +
+      '</tbody></table>';
+  } catch(e) {
+    body.innerHTML = '<div style="text-align:center;padding:32px;color:#c53030;">Erreur de chargement : ' + esc(e.message) + '</div>';
+  }
+}
+
+function closeVpsTrash() { document.getElementById('vpsTrashModal').style.display = 'none'; }
+
+async function restoreVps(id, name) {
+  const btn = document.querySelector('#trash-row-' + id + ' button');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Restauration…'; }
+  try {
+    await apiFetch('/vps/' + id + '/restore', { method:'POST' });
+    showVpsToast('♻️ VPS "' + name + '" restauré.', 'success');
+    await openVpsTrash();
+    await loadVpsList();
+    await loadVpsSelector();
+  } catch(e) {
+    showVpsToast('❌ Restauration échouée : ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '♻️ Restaurer'; }
   }
 }
 

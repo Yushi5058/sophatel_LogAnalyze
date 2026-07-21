@@ -38,7 +38,7 @@ def _load_vps_from_db() -> list[dict]:
                 "password": v.password or None,   # déchiffré par l'ORM (RM-06)
                 "ssh_key": v.ssh_key or None,
             }
-            for v in db.query(VPSServer).all()
+            for v in db.query(VPSServer).filter(VPSServer.deleted_at.is_(None)).all()
         ]
     finally:
         db.close()

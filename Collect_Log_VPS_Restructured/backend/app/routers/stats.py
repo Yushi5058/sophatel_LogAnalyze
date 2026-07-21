@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case
+from sqlalchemy import func, case, select
 from typing import Optional
 from app.core.database import get_db
 from app.models.models import LogEntry, LogCollection, LogSummary, VPSServer
@@ -9,11 +9,19 @@ from app.schemas.schemas import GlobalStats
 router = APIRouter()
 
 
-def _vps_filter(q, model, vps_id, db):
-    """Filtre optionnel par vps_id via la relation collection → vps."""
+def _active_collection_ids(db, vps_id=None):
+    """
+    Sous-requête des IDs de collections appartenant à des VPS ACTIFS
+    (deleted_at IS NULL). Les statistiques excluent ainsi les VPS supprimés
+    logiquement. Filtre en plus sur un vps_id précis si fourni.
+    """
+    q = (
+        select(LogCollection.id)
+        .join(VPSServer, VPSServer.id == LogCollection.vps_id)
+        .where(VPSServer.deleted_at.is_(None))
+    )
     if vps_id:
-        collection_ids = db.query(LogCollection.id).filter(LogCollection.vps_id == vps_id).subquery()
-        q = q.filter(model.collection_id.in_(collection_ids))
+        q = q.where(LogCollection.vps_id == vps_id)
     return q
 
 
@@ -21,24 +29,24 @@ def _vps_filter(q, model, vps_id, db):
 def global_stats(vps_id: Optional[int] = None, db: Session = Depends(get_db)):
     """KPIs globaux pour le dashboard — inclut latences P50/P95/P99 et taux 4xx/5xx"""
 
+    # IDs des collections rattachées à des VPS actifs (exclut les supprimés).
+    active_ids = _active_collection_ids(db, vps_id)
+
     # ── Base query sur LogSummary pour les compteurs ─────────────────────────
-    sq = db.query(LogSummary)
-    if vps_id:
-        col_ids = db.query(LogCollection.id).filter(LogCollection.vps_id == vps_id).subquery()
-        sq = sq.filter(LogSummary.collection_id.in_(col_ids))
+    sq = db.query(LogSummary).filter(LogSummary.collection_id.in_(active_ids))
 
     total_requests = sq.with_entities(func.sum(LogSummary.total_requests)).scalar() or 0
     total_errors   = sq.with_entities(func.sum(LogSummary.error_count)).scalar() or 0
     unique_ips     = sq.with_entities(func.sum(LogSummary.unique_ips)).scalar() or 0
     collections    = sq.with_entities(func.count(LogSummary.id)).scalar() or 0
-    vps_count      = db.query(func.count(VPSServer.id)).scalar() or 0
+    vps_count      = db.query(func.count(VPSServer.id)).filter(VPSServer.deleted_at.is_(None)).scalar() or 0
     error_rate     = round(total_errors / total_requests * 100, 2) if total_requests else 0.0
 
     # ── Latences depuis log_entries ───────────────────────────────────────────
-    eq = db.query(LogEntry).filter(LogEntry.response_time.isnot(None))
-    if vps_id:
-        col_ids2 = db.query(LogCollection.id).filter(LogCollection.vps_id == vps_id).subquery()
-        eq = eq.filter(LogEntry.collection_id.in_(col_ids2))
+    eq = db.query(LogEntry).filter(
+        LogEntry.response_time.isnot(None),
+        LogEntry.collection_id.in_(active_ids),
+    )
 
     # Moyenne + percentiles calculés côté PostgreSQL (percentile_cont),
     # sans charger toutes les latences en mémoire.
@@ -58,9 +66,7 @@ def global_stats(vps_id: Optional[int] = None, db: Session = Depends(get_db)):
     p99 = _ms(p99_s)
 
     # ── Taux 4xx et 5xx ───────────────────────────────────────────────────────
-    eq2 = db.query(LogEntry)
-    if vps_id:
-        eq2 = eq2.filter(LogEntry.collection_id.in_(col_ids2))
+    eq2 = db.query(LogEntry).filter(LogEntry.collection_id.in_(active_ids))
 
     total_with_status = eq2.filter(LogEntry.status.isnot(None)).count() or 0
     count_4xx = eq2.filter(LogEntry.status >= 400, LogEntry.status < 500).count()
@@ -87,30 +93,27 @@ def global_stats(vps_id: Optional[int] = None, db: Session = Depends(get_db)):
 
 @router.get("/status-distribution")
 def status_distribution(vps_id: Optional[int] = None, db: Session = Depends(get_db)):
-    q = db.query(LogEntry.status, func.count(LogEntry.id))
-    if vps_id:
-        col_ids = db.query(LogCollection.id).filter(LogCollection.vps_id == vps_id).subquery()
-        q = q.filter(LogEntry.collection_id.in_(col_ids))
+    q = db.query(LogEntry.status, func.count(LogEntry.id)).filter(
+        LogEntry.collection_id.in_(_active_collection_ids(db, vps_id))
+    )
     rows = q.group_by(LogEntry.status).order_by(LogEntry.status).all()
     return [{"status": r[0], "count": r[1]} for r in rows]
 
 
 @router.get("/top-paths")
 def top_paths(limit: int = 10, vps_id: Optional[int] = None, db: Session = Depends(get_db)):
-    q = db.query(LogEntry.path, func.count(LogEntry.id).label("hits"))
-    if vps_id:
-        col_ids = db.query(LogCollection.id).filter(LogCollection.vps_id == vps_id).subquery()
-        q = q.filter(LogEntry.collection_id.in_(col_ids))
+    q = db.query(LogEntry.path, func.count(LogEntry.id).label("hits")).filter(
+        LogEntry.collection_id.in_(_active_collection_ids(db, vps_id))
+    )
     rows = q.group_by(LogEntry.path).order_by(func.count(LogEntry.id).desc()).limit(limit).all()
     return [{"path": r[0], "hits": r[1]} for r in rows]
 
 
 @router.get("/top-ips")
 def top_ips(limit: int = 10, vps_id: Optional[int] = None, db: Session = Depends(get_db)):
-    q = db.query(LogEntry.ip, func.count(LogEntry.id).label("requests"))
-    if vps_id:
-        col_ids = db.query(LogCollection.id).filter(LogCollection.vps_id == vps_id).subquery()
-        q = q.filter(LogEntry.collection_id.in_(col_ids))
+    q = db.query(LogEntry.ip, func.count(LogEntry.id).label("requests")).filter(
+        LogEntry.collection_id.in_(_active_collection_ids(db, vps_id))
+    )
     rows = q.group_by(LogEntry.ip).order_by(func.count(LogEntry.id).desc()).limit(limit).all()
     return [{"ip": r[0], "requests": r[1]} for r in rows]
 
@@ -120,10 +123,10 @@ def requests_over_time(vps_id: Optional[int] = None, db: Session = Depends(get_d
     q = db.query(
         func.date_trunc("hour", LogEntry.timestamp).label("hour"),
         func.count(LogEntry.id).label("count")
-    ).filter(LogEntry.timestamp.isnot(None))
-    if vps_id:
-        col_ids = db.query(LogCollection.id).filter(LogCollection.vps_id == vps_id).subquery()
-        q = q.filter(LogEntry.collection_id.in_(col_ids))
+    ).filter(
+        LogEntry.timestamp.isnot(None),
+        LogEntry.collection_id.in_(_active_collection_ids(db, vps_id)),
+    )
     rows = q.group_by("hour").order_by("hour").all()
     return [{"hour": str(r[0]), "count": r[1]} for r in rows]
 
@@ -131,10 +134,10 @@ def requests_over_time(vps_id: Optional[int] = None, db: Session = Depends(get_d
 @router.get("/endpoints")
 def endpoints_stats(limit: int = 10, vps_id: Optional[int] = None, db: Session = Depends(get_db)):
     """Métriques détaillées par endpoint : avg, p95, p99, max latence, nb requêtes, taux erreur"""
-    q = db.query(LogEntry).filter(LogEntry.path.isnot(None))
-    if vps_id:
-        col_ids = db.query(LogCollection.id).filter(LogCollection.vps_id == vps_id).subquery()
-        q = q.filter(LogEntry.collection_id.in_(col_ids))
+    q = db.query(LogEntry).filter(
+        LogEntry.path.isnot(None),
+        LogEntry.collection_id.in_(_active_collection_ids(db, vps_id)),
+    )
 
     # Agrégation par chemin côté PostgreSQL (comptage, taux d'erreur, percentiles).
     rows = (
@@ -182,12 +185,9 @@ def get_alerts(vps_id: Optional[int] = None, db: Session = Depends(get_db)):
     """
     from datetime import timezone
 
-    q = db.query(LogEntry)
-    sq = db.query(LogSummary)
-    if vps_id:
-        col_ids = db.query(LogCollection.id).filter(LogCollection.vps_id == vps_id).subquery()
-        q  = q.filter(LogEntry.collection_id.in_(col_ids))
-        sq = sq.filter(LogSummary.collection_id.in_(col_ids))
+    active_ids = _active_collection_ids(db, vps_id)
+    q  = db.query(LogEntry).filter(LogEntry.collection_id.in_(active_ids))
+    sq = db.query(LogSummary).filter(LogSummary.collection_id.in_(active_ids))
 
     total   = q.filter(LogEntry.status.isnot(None)).count() or 0
     c_4xx   = q.filter(LogEntry.status >= 400, LogEntry.status < 500).count()

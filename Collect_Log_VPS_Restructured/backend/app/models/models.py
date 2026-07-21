@@ -1,6 +1,6 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, BigInteger
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, BigInteger, Index
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, text
 from app.core.database import Base
 from app.core.crypto import EncryptedText
 
@@ -8,9 +8,19 @@ from app.core.crypto import EncryptedText
 class VPSServer(Base):
     """Inventaire des serveurs VPS"""
     __tablename__ = "vps_servers"
+    # Unicité du nom seulement parmi les VPS actifs (deleted_at IS NULL),
+    # pour autoriser la réutilisation d'un nom après suppression logique.
+    __table_args__ = (
+        Index(
+            "uq_vps_servers_name_active",
+            "name",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
 
     id         = Column(Integer, primary_key=True, index=True)
-    name       = Column(String(100), unique=True, nullable=False)
+    name       = Column(String(100), nullable=False)   # unicité gérée par l'index partiel ci-dessus
     host       = Column(String(255), nullable=False)
     user       = Column(String(100), nullable=False, default="root")
     port       = Column(Integer, default=22)
@@ -19,8 +29,12 @@ class VPSServer(Base):
     password   = Column(EncryptedText, nullable=True)
     ssh_key    = Column(EncryptedText, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    deleted_at = Column(DateTime(timezone=True), nullable=True)  # suppression logique (soft delete)
 
-    collections = relationship("LogCollection", back_populates="vps")
+    collections = relationship(
+        "LogCollection", back_populates="vps",
+        cascade="all, delete-orphan", passive_deletes=True,
+    )
 
 
 class LogCollection(Base):
@@ -28,15 +42,21 @@ class LogCollection(Base):
     __tablename__ = "log_collections"
 
     id           = Column(Integer, primary_key=True, index=True)
-    vps_id       = Column(Integer, ForeignKey("vps_servers.id"), nullable=False)
+    vps_id       = Column(Integer, ForeignKey("vps_servers.id", ondelete="CASCADE"), nullable=False)
     collected_at = Column(DateTime(timezone=True), server_default=func.now())
     source_file  = Column(String(500))
     total_lines  = Column(Integer, default=0)
     mode         = Column(String(20), default="ssh")  # ssh | mock
 
     vps     = relationship("VPSServer", back_populates="collections")
-    entries = relationship("LogEntry", back_populates="collection")
-    summary = relationship("LogSummary", back_populates="collection", uselist=False)
+    entries = relationship(
+        "LogEntry", back_populates="collection",
+        cascade="all, delete-orphan", passive_deletes=True,
+    )
+    summary = relationship(
+        "LogSummary", back_populates="collection", uselist=False,
+        cascade="all, delete-orphan", passive_deletes=True,
+    )
 
 
 class LogEntry(Base):
@@ -44,7 +64,7 @@ class LogEntry(Base):
     __tablename__ = "log_entries"
 
     id            = Column(BigInteger, primary_key=True, index=True)
-    collection_id = Column(Integer, ForeignKey("log_collections.id"), nullable=False)
+    collection_id = Column(Integer, ForeignKey("log_collections.id", ondelete="CASCADE"), nullable=False)
     ip            = Column(String(45))
     timestamp     = Column(DateTime(timezone=True))
     method        = Column(String(10))
@@ -63,7 +83,7 @@ class LogSummary(Base):
     __tablename__ = "log_summaries"
 
     id            = Column(Integer, primary_key=True, index=True)
-    collection_id = Column(Integer, ForeignKey("log_collections.id"), unique=True)
+    collection_id = Column(Integer, ForeignKey("log_collections.id", ondelete="CASCADE"), unique=True)
     total_requests = Column(Integer, default=0)
     unique_ips     = Column(Integer, default=0)
     error_count    = Column(Integer, default=0)
@@ -82,7 +102,7 @@ class EndpointStat(Base):
     __tablename__ = "endpoint_stats"
 
     id            = Column(Integer, primary_key=True, index=True)
-    collection_id = Column(Integer, ForeignKey("log_collections.id"), nullable=False)
+    collection_id = Column(Integer, ForeignKey("log_collections.id", ondelete="CASCADE"), nullable=False)
     endpoint      = Column(Text, nullable=False)
 
     # Comptage
