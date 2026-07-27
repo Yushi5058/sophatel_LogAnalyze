@@ -1,0 +1,4 @@
+# Dépendances de développement / tests (RM-27)
+# Installer : pip install -r requirements-dev.txt
+pytest>=8.0
+httpx>=0.27
