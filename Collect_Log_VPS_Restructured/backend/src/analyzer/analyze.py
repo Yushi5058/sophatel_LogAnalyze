@@ -211,7 +211,7 @@ def analyze_csv(csv_path: str, vps_name: str, mode: str = "ssh") -> dict:
             "duplicates_skipped": duplicates,
             "error_rate": round(error_count / len(new_rows) * 100, 2) if new_rows else 0.0,
         }
-        print(f"[✓] Analyse terminée → collection #{collection.id}")
+        print(f"[OK] Analyse terminee -> collection #{collection.id}")
         print(f"    {result['total_requests']} requêtes | {result['unique_ips']} IPs uniques | "
               f"{result['error_rate']}% erreurs")
         return result
@@ -223,33 +223,11 @@ def analyze_csv(csv_path: str, vps_name: str, mode: str = "ssh") -> dict:
         db.close()
 
 
-# ── CLI ───────────────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Analyseur de logs Nginx → PostgreSQL")
-    parser.add_argument("csv_file", help="Chemin vers le fichier CSV à analyser")
-    parser.add_argument("--vps",  default="unknown", help="Nom du VPS source")
-    parser.add_argument("--mode", default="ssh", choices=["ssh", "mock"], help="Mode de collecte")
-    args = parser.parse_args()
-
-    analyze_csv(args.csv_file, vps_name=args.vps, mode=args.mode)
-"""
-Fonction à ajouter à la fin de :
-    backend/src/analyzer/analyze.py
-
-Elle sert de point d'entrée appelé par le scheduler.
-"""
-
-from pathlib import Path
-
-
+# ── Analyse par lot (point d'entrée du scheduler) ─────────────────────────────
 def run_analysis(log_dir: Path | None = None):
     """
-    Parcourt tous les fichiers CSV dans logs/<vps>/*.csv
-    et les insère en base via la logique existante d'analyze.py.
-
-    Appelée par le scheduler (job_analyze) toutes les 35 min.
+    Parcourt tous les fichiers CSV dans logs/<vps>/*.csv et les insère en base
+    via analyze_csv. Appelée par le scheduler (job_analyze).
     """
     from src.config import config
 
@@ -284,8 +262,21 @@ def run_analysis(log_dir: Path | None = None):
     for csv_path in new_files:
         # Extrait le nom du VPS depuis le chemin : logs/<vps_name>/fichier.csv
         vps_name = csv_path.parent.name
-        print(f"  → Traitement : {csv_path.name}  (VPS: {vps_name})")
+        print(f"  -> Traitement : {csv_path.name}  (VPS: {vps_name})")
         try:
-            analyze_csv(str(csv_path), vps_name)   # fonction déjà présente dans analyze.py
+            analyze_csv(str(csv_path), vps_name)
         except Exception as e:
-            print(f"  ✗ Erreur sur {csv_path.name} : {e}")
+            print(f"  [X] Erreur sur {csv_path.name} : {e}")
+
+
+# ── CLI ───────────────────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Analyseur de logs Nginx -> PostgreSQL")
+    parser.add_argument("csv_file", help="Chemin vers le fichier CSV à analyser")
+    parser.add_argument("--vps",  default="unknown", help="Nom du VPS source")
+    parser.add_argument("--mode", default="ssh", choices=["ssh", "mock"], help="Mode de collecte")
+    args = parser.parse_args()
+
+    analyze_csv(args.csv_file, vps_name=args.vps, mode=args.mode)

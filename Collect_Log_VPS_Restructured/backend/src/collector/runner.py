@@ -179,7 +179,7 @@ def run_collection(vps_list: list[dict], use_mock: bool = False) -> list[dict]:
                 "ok": True,
             })
         except Exception as e:
-            print(f"  ✗ {name} — Erreur : {e}")
+            print(f"  [X] {name} - Erreur : {e}")
             results.append({"vps": name, "error": str(e), "ok": False})
 
     return results

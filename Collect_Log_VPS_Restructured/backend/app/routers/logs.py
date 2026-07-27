@@ -11,7 +11,7 @@ router = APIRouter()
 @router.get("/collections", response_model=list[CollectionOut])
 def get_collections(
     vps_id: Optional[int] = None,
-    limit: int = Query(50, le=200),
+    limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db)
 ):
     """Liste toutes les sessions de collecte"""
@@ -33,7 +33,7 @@ def get_collection(collection_id: int, db: Session = Depends(get_db)):
 def get_entries(
     collection_id: int,
     page: int = Query(1, ge=1),
-    size: int = Query(100, le=500),
+    size: int = Query(100, ge=1, le=500),
     status: Optional[int] = None,
     method: Optional[str] = None,
     ip: Optional[str] = None,
