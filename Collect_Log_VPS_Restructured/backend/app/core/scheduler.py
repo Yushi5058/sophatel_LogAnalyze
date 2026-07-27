@@ -12,9 +12,12 @@ Installation :
 import logging
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
 
+# Engine SQLAlchemy central réutilisé pour le store des jobs (pas de second pool).
+from app.core.database import engine
 # Paquets `app` et `src` résolus depuis backend/ (répertoire de lancement de l'API)
 from src.config import config
 from src.collector.runner import run_collection
@@ -70,7 +73,16 @@ def _persist_offsets(results: list[dict]) -> None:
 logger = logging.getLogger("scheduler")
 
 # ── Instance globale du scheduler ─────────────────────────────────────────────
-scheduler = AsyncIOScheduler(timezone="Africa/Casablanca")
+# Jobs PERSISTÉS en PostgreSQL (RM-26) : ils survivent aux redémarrages de l'API
+# (table `apscheduler_jobs`, créée automatiquement au premier démarrage).
+#   - coalesce=True      : après une coupure, une seule exécution rattrape les runs manqués
+#                          (pas de rafale), en complément de misfire_grace_time.
+#   - max_instances=1    : jamais deux exécutions simultanées du même job.
+scheduler = AsyncIOScheduler(
+    jobstores={"default": SQLAlchemyJobStore(engine=engine)},
+    job_defaults={"coalesce": True, "max_instances": 1},
+    timezone="Africa/Casablanca",
+)
 
 
 # ── Tâche 1 : Collecte des logs ───────────────────────────────────────────────
