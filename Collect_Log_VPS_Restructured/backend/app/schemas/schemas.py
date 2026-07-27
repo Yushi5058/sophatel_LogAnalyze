@@ -1,3 +1,4 @@
+import ipaddress
 import re
 from pydantic import BaseModel, field_validator
 from typing import Optional, List
@@ -6,6 +7,35 @@ from datetime import datetime
 
 # Caractères interdits dans un chemin de fichier distant (shell injection)
 _FORBIDDEN_PATH_CHARS = re.compile(r'[;&|`$(){}[\]!#~<>]')
+
+# Nom d'hôte RFC 1123 : labels [A-Za-z0-9-] (1–63), pas de tiret en début/fin,
+# total ≤ 253. Autorise un label simple (localhost) ou un FQDN (ex. srv.exemple.com).
+_HOSTNAME_RE = re.compile(
+    r'^(?=.{1,253}$)'
+    r'(?!-)[A-Za-z0-9-]{1,63}(?<!-)'
+    r'(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$'
+)
+
+
+def _validate_host(v: str) -> str:
+    """
+    Valide `host` : adresse IP (v4/v6) OU nom d'hôte RFC 1123 (RM-25).
+    Rejette les espaces, métacaractères shell, schémas (http://), chemins…
+    Défense en profondeur qui renforce RM-01 (le host part vers la connexion SSH).
+    """
+    v = (v or "").strip()
+    if not v:
+        raise ValueError("host obligatoire")
+    try:
+        ipaddress.ip_address(v)          # IPv4 / IPv6 littérale
+        return v
+    except ValueError:
+        pass
+    if _HOSTNAME_RE.match(v):
+        return v
+    raise ValueError(
+        "host invalide : adresse IP (v4/v6) ou nom d'hôte valide attendu"
+    )
 
 class VPSBase(BaseModel):
     name: str
@@ -29,6 +59,11 @@ class VPSCreate(VPSBase):
     password: Optional[str] = None
     ssh_key:  Optional[str] = None
 
+    @field_validator("host")
+    @classmethod
+    def validate_host(cls, v: str) -> str:
+        return _validate_host(v)
+
 
 class VPSUpdate(BaseModel):
     name:     Optional[str] = None
@@ -38,6 +73,13 @@ class VPSUpdate(BaseModel):
     log_path: Optional[str] = None
     password: Optional[str] = None
     ssh_key:  Optional[str] = None
+
+    @field_validator("host")
+    @classmethod
+    def validate_host(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return _validate_host(v)
 
     @field_validator("log_path")
     @classmethod
