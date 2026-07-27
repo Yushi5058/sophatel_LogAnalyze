@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import require_role
@@ -11,13 +12,31 @@ router = APIRouter()
 
 
 @router.get("/", response_model=list[VPSOut])
-def list_vps(db: Session = Depends(get_db)):
-    return (
-        db.query(VPSServer)
-        .filter(VPSServer.deleted_at.is_(None))
-        .order_by(VPSServer.name)
-        .all()
-    )
+def list_vps(
+    response: Response,
+    skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
+    limit: Optional[int] = Query(
+        None, ge=1, le=500,
+        description="Taille de page ; absent = tous les VPS (rétrocompatible)",
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Liste des VPS actifs, paginable (RM-24).
+
+    - `skip` / `limit` optionnels ; sans `limit`, renvoie tout (comportement
+      historique préservé pour le frontend existant).
+    - Le nombre total de VPS actifs est renvoyé dans l'en-tête `X-Total-Count`
+      (exposé via CORS), pour construire une pagination côté client.
+    """
+    base = db.query(VPSServer).filter(VPSServer.deleted_at.is_(None))
+    total = base.count()
+    response.headers["X-Total-Count"] = str(total)
+
+    q = base.order_by(VPSServer.name).offset(skip)
+    if limit is not None:
+        q = q.limit(limit)
+    return q.all()
 
 
 @router.get("/deleted", response_model=list[VPSOut])
