@@ -12,6 +12,8 @@ class Settings:
     DEBUG: bool      = os.getenv("DEBUG", "false").lower() == "true"
     LOG_DIR: str     = os.getenv("LOG_DIR", "logs")
     DATA_DIR: str    = os.getenv("DATA_DIR", "data")
+    # Planificateur APScheduler activé au démarrage (désactivable en test/CLI).
+    SCHEDULER_ENABLED: bool = os.getenv("SCHEDULER_ENABLED", "true").lower() == "true"
 
     # Origines autorisées pour CORS (liste séparée par des virgules dans l'env)
     CORS_ORIGINS: list = [

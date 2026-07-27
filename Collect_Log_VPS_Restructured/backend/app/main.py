@@ -69,10 +69,13 @@ def create_default_users():
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     create_default_users()
-    register_jobs()
-    scheduler.start()
+    # Scheduler désactivable (tests, exécution CLI) via SCHEDULER_ENABLED=false.
+    if settings.SCHEDULER_ENABLED:
+        register_jobs()
+        scheduler.start()
     yield
-    scheduler.shutdown()
+    if settings.SCHEDULER_ENABLED:
+        scheduler.shutdown()
 
 
 app = FastAPI(
