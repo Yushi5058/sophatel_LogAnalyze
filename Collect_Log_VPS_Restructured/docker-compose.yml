@@ -1,0 +1,46 @@
+# Stack reproductible : API backend + PostgreSQL (RM-28)
+#
+# Démarrage :
+#   cp .env.docker.example .env      # puis éditer SECRET_KEY
+#   docker compose up --build
+#
+# L'API écoute sur http://localhost:8000 (docs : /docs).
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-sophatel_logs}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-sophatel_logs}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # La base est jointe par le nom de service `db` (réseau interne compose).
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-sophatel_logs}
+      SECRET_KEY: ${SECRET_KEY:-}                # OBLIGATOIRE (openssl rand -hex 32)
+      CREDENTIALS_KEY: ${CREDENTIALS_KEY:-}      # recommandé (Fernet.generate_key())
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}        # sinon mot de passe aléatoire journalisé
+      USE_MOCK: ${USE_MOCK:-false}
+      DEBUG: ${DEBUG:-false}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:4200,http://127.0.0.1:4200}
+      SCHEDULER_ENABLED: ${SCHEDULER_ENABLED:-true}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    restart: unless-stopped
+
+volumes:
+  pgdata:

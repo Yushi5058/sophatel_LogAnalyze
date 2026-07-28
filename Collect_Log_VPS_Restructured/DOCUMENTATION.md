@@ -86,6 +86,22 @@ node --version          # 18+
 
 ## 📦 Installation
 
+### Option A — Docker (recommandé, reproductible)
+
+Prérequis : Docker + Docker Compose.
+
+```bash
+cd Collect_Log_VPS_Restructured
+cp .env.docker.example .env          # puis éditez SECRET_KEY (openssl rand -hex 32)
+docker compose up --build            # API sur http://localhost:8000  (docs : /docs)
+```
+
+La stack lance **PostgreSQL** + l'**API** ; les migrations Alembic sont appliquées automatiquement au
+démarrage. Pour une démo sans vrais VPS, mettez `USE_MOCK=true` dans `.env`. Arrêt : `docker compose down`
+(ajouter `-v` pour supprimer aussi les données).
+
+### Option B — Installation manuelle
+
 ### 1. Environnement Python 3.12
 
 ```bash
