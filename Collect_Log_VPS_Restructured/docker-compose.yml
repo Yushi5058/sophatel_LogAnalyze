@@ -42,5 +42,14 @@ services:
       - "${API_PORT:-8000}:8000"
     restart: unless-stopped
 
+  # Faux VPS de test (RM-33) — Nginx + SSH, pour valider la collecte SSH réelle.
+  # Optionnel : `docker compose --profile testvps up -d test-vps`
+  # L'API peut le collecter via l'hôte `test-vps` (port 22) sur le réseau compose.
+  test-vps:
+    build: ./test-vps
+    profiles: ["testvps"]
+    ports:
+      - "${TESTVPS_SSH_PORT:-2222}:22"   # SSH exposé pour tester depuis l'hôte
+
 volumes:
   pgdata:
