@@ -51,7 +51,7 @@ Collect_Log_VPS_Restructured/
 │   │   └── analyzer/analyze.py       ← Parsing CSV → base (idempotent)
 │   ├── alembic/versions/             ← Migrations de schéma
 │   ├── config/vps.yaml               ← Inventaire VPS (utilisé par le scheduler)
-│   ├── scripts/                      ← CLI (collect.py, analyze.py) + init_db.sql
+│   ├── scripts/                      ← CLI (collect.py, analyze.py)
 │   ├── requirements.txt
 │   └── .env                          ← Secrets (NON committé)
 │
@@ -104,8 +104,8 @@ set PGPASSWORD=<mdp_postgres>
 psql -U postgres -c "CREATE DATABASE sophatel_logs;"
 ```
 
-> Le schéma est géré par **Alembic** (voir plus bas). Le script `scripts/init_db.sql` fournit aussi des
-> extensions et des vues pratiques.
+> Le schéma, les extensions (`pg_trgm`, `btree_gin`) et les vues pratiques (`v_vps_summary`,
+> `v_top_paths`) sont tous gérés par **Alembic** (voir plus bas). Aucun script d'init manuel n'est requis.
 
 ### 3. Configuration `.env`
 
@@ -308,7 +308,7 @@ Tables principales : `users`, `vps_servers`, `log_collections`, `log_entries`, `
 `endpoint_stats`.
 
 - `vps_servers` : `password` et `ssh_key` sont **chiffrés au repos** (Fernet).
-- Vues pratiques (via `init_db.sql`) : `v_vps_summary`, `v_top_paths`.
+- Vues pratiques (via migration Alembic `7fd3b5d36be0`) : `v_vps_summary`, `v_top_paths`.
 
 ---
 
