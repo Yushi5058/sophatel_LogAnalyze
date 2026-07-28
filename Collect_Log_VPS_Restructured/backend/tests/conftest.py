@@ -23,6 +23,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-0123456789abcdef0123456789a
 os.environ.setdefault("ADMIN_USERNAME", "admin")
 os.environ.setdefault("ADMIN_PASSWORD", "admin-test-pw")
 os.environ["SCHEDULER_ENABLED"] = "false"
+os.environ["DEBUG"] = "false"   # réponses d'erreur déterministes (message générique)
 os.environ.setdefault("USE_MOCK", "true")
 
 import pytest  # noqa: E402
