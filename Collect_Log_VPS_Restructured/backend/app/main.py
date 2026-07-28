@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import logs, stats, vps
 from app.routers import collect_router, analyze_router
 from app.routers import endpoint_stats_router
+from app.routers import enrich_router
 from app.routers import auth_router
 from app.core.database import engine, Base, get_db
 from app.core.scheduler import scheduler, register_jobs
@@ -110,6 +111,7 @@ app.include_router(vps.router,                     prefix="/api/vps",           
 app.include_router(collect_router.router,          prefix="/api/collect",        tags=["Collect"],        **_auth)
 app.include_router(analyze_router.router,          prefix="/api/analyze",        tags=["Analyze"],        **_auth)
 app.include_router(endpoint_stats_router.router,   prefix="/api/endpoint-stats", tags=["Endpoint Stats"], **_auth)
+app.include_router(enrich_router.router,           prefix="/api/enrich",         tags=["Enrichment"],     **_auth)
 
 
 @app.get("/api/auth/me", tags=["Auth"])

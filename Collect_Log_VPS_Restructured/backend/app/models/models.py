@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, BigInteger, Index
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, BigInteger, Index, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func, text
 from app.core.database import Base
@@ -166,3 +166,23 @@ class User(Base):
     is_active       = Column(Integer, default=1)             # 1=actif, 0=désactivé
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
     last_login      = Column(DateTime(timezone=True), nullable=True)
+
+
+class IpEnrichment(Base):
+    """
+    Cache d'enrichissement par adresse IP (RM-34) : géolocalisation + réputation
+    issues d'API externes. Clé globale (indépendante du VPS) avec TTL sur
+    `fetched_at`. `is_private` marque les IP locales/réservées (pas d'appel externe).
+    """
+    __tablename__ = "ip_enrichment"
+
+    ip           = Column(String(45), primary_key=True)
+    is_private   = Column(Boolean, default=False)
+    country_code = Column(String(2),  nullable=True)
+    country      = Column(String(100), nullable=True)
+    city         = Column(String(100), nullable=True)
+    isp          = Column(String(200), nullable=True)
+    abuse_score  = Column(Integer, nullable=True)   # 0–100 (AbuseIPDB)
+    is_malicious = Column(Boolean, nullable=True)
+    providers    = Column(String(100), nullable=True)  # fournisseurs ayant répondu
+    fetched_at   = Column(DateTime(timezone=True), server_default=func.now())
