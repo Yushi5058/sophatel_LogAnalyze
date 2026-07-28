@@ -3,6 +3,13 @@ import logging
 
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import (
+    http_exception_handler,
+    request_validation_exception_handler,
+)
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.routers import logs, stats, vps
 from app.routers import collect_router, analyze_router
 from app.routers import endpoint_stats_router
@@ -89,6 +96,37 @@ app = FastAPI(
 # Limitation de débit (anti brute-force) — renvoie 429 au-delà du seuil
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ── Handlers d'exception globaux (RM-35, complète RM-12) ──────────────────────
+# Gestion d'erreurs centralisée : journalisation systématique + réponses
+# homogènes (`detail`), sans répéter les try/except dans chaque route.
+_log = logging.getLogger("app.main")
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _handle_http_exception(request, exc: StarletteHTTPException):
+    # Les 5xx (rares, ex. levés volontairement) sont tracés côté serveur ;
+    # on délègue ensuite au handler par défaut (préserve `detail` ET les en-têtes,
+    # ex. WWW-Authenticate du 401).
+    if exc.status_code >= 500:
+        _log.exception("HTTP %s sur %s", exc.status_code, request.url.path)
+    return await http_exception_handler(request, exc)
+
+
+@app.exception_handler(RequestValidationError)
+async def _handle_validation_error(request, exc: RequestValidationError):
+    # 422 : on journalise puis on délègue au handler par défaut (garde `detail`).
+    _log.info("422 validation sur %s : %s", request.url.path, exc.errors())
+    return await request_validation_exception_handler(request, exc)
+
+
+@app.exception_handler(Exception)
+async def _handle_unhandled_exception(request, exc: Exception):
+    # Filet global : toute exception non gérée est journalisée (stacktrace) et
+    # renvoyée en 500 avec un message générique (détail seulement si DEBUG).
+    _log.exception("Exception non gérée sur %s", request.url.path)
+    detail = f"{type(exc).__name__}: {exc}" if settings.DEBUG else "Erreur interne du serveur."
+    return JSONResponse(status_code=500, content={"detail": detail})
 
 app.add_middleware(
     CORSMiddleware,
