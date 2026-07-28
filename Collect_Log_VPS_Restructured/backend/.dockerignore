@@ -1,0 +1,24 @@
+# Environnements et caches
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+**/__pycache__/
+
+# Secrets et config locale (jamais dans l'image)
+.env
+.env.*
+
+# Données/artefacts d'exécution
+logs/
+data/
+
+# Tests (non nécessaires au runtime)
+tests/
+
+# Divers
+*.md
+.git/
+.dockerignore
+Dockerfile
