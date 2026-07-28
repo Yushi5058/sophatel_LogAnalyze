@@ -59,7 +59,7 @@ from app.main import app  # noqa: E402
 limiter.enabled = False  # pas de limitation de débit pendant les tests
 
 # Tables réellement présentes (ordre enfants → parents pour le TRUNCATE CASCADE)
-_TABLES = "log_entries, endpoint_stats, log_summaries, log_collections, vps_servers, users"
+_TABLES = "log_entries, endpoint_stats, log_summaries, log_collections, vps_servers, users, ip_enrichment"
 
 
 @pytest.fixture(scope="session", autouse=True)

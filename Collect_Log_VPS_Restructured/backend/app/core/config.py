@@ -15,6 +15,18 @@ class Settings:
     # Planificateur APScheduler activé au démarrage (désactivable en test/CLI).
     SCHEDULER_ENABLED: bool = os.getenv("SCHEDULER_ENABLED", "true").lower() == "true"
 
+    # Enrichissement des IP via API externes (RM-34) : géoloc + réputation.
+    ENRICHMENT_ENABLED: bool = os.getenv("ENRICHMENT_ENABLED", "true").lower() == "true"
+    # Géolocalisation (sans clé par défaut : ip-api.com). {ip} est substitué.
+    GEOIP_URL: str = os.getenv("GEOIP_URL", "http://ip-api.com/json/{ip}")
+    # Réputation AbuseIPDB (optionnel) : sans clé, l'étape réputation est ignorée.
+    ABUSEIPDB_KEY: str = os.getenv("ABUSEIPDB_KEY", "")
+    # Durée de validité du cache d'enrichissement (jours).
+    ENRICHMENT_TTL_DAYS: int = int(os.getenv("ENRICHMENT_TTL_DAYS", "7"))
+    # Délai d'appel HTTP externe (secondes) et plafond d'IP enrichies par requête.
+    ENRICHMENT_TIMEOUT: float = float(os.getenv("ENRICHMENT_TIMEOUT", "4"))
+    ENRICHMENT_MAX_PER_CALL: int = int(os.getenv("ENRICHMENT_MAX_PER_CALL", "20"))
+
     # Origines autorisées pour CORS (liste séparée par des virgules dans l'env)
     CORS_ORIGINS: list = [
         o.strip() for o in os.getenv(
