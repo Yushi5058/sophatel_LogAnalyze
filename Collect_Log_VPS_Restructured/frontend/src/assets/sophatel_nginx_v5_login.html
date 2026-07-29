@@ -564,6 +564,7 @@ body.locked .app-shell{display:none}
         <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)"><div class="spinner"></div></td></tr>
       </tbody>
     </table>
+    <div class="ep-pagination" id="vpsPager" style="display:none;"></div>
   </div>
 </div>
 
@@ -891,6 +892,7 @@ async function switchVPS(val) {
     }
     if (topIps.status === 'fulfilled' && Array.isArray(topIps.value)) {
       renderTopList(1, topIps.value.map(i => [i.ip || i.source_ip || '—', i.count || i.requests || i.total || 0]));
+      enrichTopIps(vpsParam);   // enrichissement progressif (pays + réputation), non bloquant
     } else {
       document.querySelectorAll('.top-card')[1].innerHTML = '<div class="top-title">Top IP Sources</div><div style="color:var(--text4);font-size:12px;padding:10px">Aucune donnée</div>';
     }
@@ -1164,6 +1166,36 @@ function renderTopList(cardIndex, rows) {
     </div>`).join('');
 }
 
+// Rend la carte « Top IP Sources » enrichie (pays + réputation) — RM-34.
+function renderTopIps(rows) {
+  const card = document.querySelectorAll('.top-card')[1];
+  if (!card) return;
+  const title = card.querySelector('.top-title')?.outerHTML || '<div class="top-title">Top IP Sources</div>';
+  if (!rows.length) { card.innerHTML = title + '<div style="color:var(--text4);font-size:12px;padding:10px">Aucune donnée</div>'; return; }
+  const max = Math.max(...rows.map(r => r.requests || 0), 1);
+  card.innerHTML = title + rows.slice(0, 5).map((r, i) => {
+    const cnt = r.requests || 0;
+    let tag = '';
+    if (r.is_private)          tag = '<span style="font-size:10px;color:var(--text4);margin-left:6px">local</span>';
+    else if (r.country_code)   tag = `<span title="${esc(r.country || '')}" style="font-size:10px;color:var(--text3);margin-left:6px">${esc(r.country_code)}</span>`;
+    const mal = r.is_malicious ? '<span title="IP signalée comme malveillante" style="font-size:10px;color:#c53030;font-weight:600;margin-left:6px">⚠</span>' : '';
+    return `<div class="top-item">
+      <div class="top-rank">${i + 1}</div>
+      <div class="top-path">${esc(r.ip || '—')}${tag}${mal}</div>
+      <div class="top-bar-wrap"><div class="top-bar" style="width:${Math.round(cnt / max * 100)}%"></div></div>
+      <div class="top-count">${esc(cnt)}</div>
+    </div>`;
+  }).join('');
+}
+
+// Enrichissement progressif de la carte Top IP (non bloquant, best-effort).
+async function enrichTopIps(vpsParam) {
+  try {
+    const data = await apiFetch('/enrich/top-ips' + (vpsParam || ''));
+    if (Array.isArray(data) && data.length) renderTopIps(data);
+  } catch (_) { /* on garde l'affichage simple si l'enrichissement échoue */ }
+}
+
 function filterLogs() {
   const status = document.getElementById('f-status').value.trim();
   const path   = document.getElementById('f-path').value.trim().toLowerCase();
@@ -1313,15 +1345,59 @@ function showVpsToast(msg, type) {
   setTimeout(() => { t.style.display = 'none'; }, 4000);
 }
 
+// ── Pagination de la liste VPS (RM-24 : skip/limit + en-tête X-Total-Count) ──
+let vpsPage = 1;
+const VPS_PAGE_SIZE = 10;
+
+// Variante d'apiFetch qui expose le total via l'en-tête X-Total-Count.
+async function apiFetchList(path) {
+  const token = getToken();
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const r = await fetch(API + path, { headers });
+  if (r.status === 401) { doLogout(); throw new Error('Session expirée, veuillez vous reconnecter.'); }
+  if (!r.ok) {
+    let detail = `HTTP ${r.status}`;
+    try { const j = await r.json(); if (j && typeof j.detail === 'string') detail = j.detail; } catch(_) {}
+    throw new Error(detail);
+  }
+  const total = parseInt(r.headers.get('X-Total-Count') || '0', 10);
+  return { items: await r.json(), total };
+}
+
+function renderVpsPager(total) {
+  const pager = document.getElementById('vpsPager');
+  if (!pager) return;
+  if (total <= VPS_PAGE_SIZE) { pager.style.display = 'none'; return; }
+  const pages = Math.max(1, Math.ceil(total / VPS_PAGE_SIZE));
+  const from = (vpsPage - 1) * VPS_PAGE_SIZE + 1;
+  const to = Math.min(vpsPage * VPS_PAGE_SIZE, total);
+  pager.style.display = 'flex';
+  pager.innerHTML = `
+    <span>${from}–${to} sur ${total}</span>
+    <span style="flex:1"></span>
+    <button class="btn btn-ghost" ${vpsPage <= 1 ? 'disabled' : ''} onclick="changeVpsPage(-1)">← Précédent</button>
+    <span>Page ${vpsPage}/${pages}</span>
+    <button class="btn btn-ghost" ${vpsPage >= pages ? 'disabled' : ''} onclick="changeVpsPage(1)">Suivant →</button>`;
+}
+
+function changeVpsPage(delta) { vpsPage = Math.max(1, vpsPage + delta); loadVpsList(); }
+
 async function loadVpsList() {
   const tbody = document.getElementById('vpsTbody');
   if (!tbody) return;
   tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)"><div class="spinner" style="margin:0 auto 8px"></div>Chargement…</td></tr>';
   let list = [];
+  let total = 0;
   try {
-    list = await apiFetch('/vps/');
+    const skip = (vpsPage - 1) * VPS_PAGE_SIZE;
+    const res = await apiFetchList(`/vps/?skip=${skip}&limit=${VPS_PAGE_SIZE}`);
+    list = res.items || [];
+    total = res.total || 0;
+    if (list.length === 0 && total > 0 && vpsPage > 1) { vpsPage = 1; return loadVpsList(); }
     if (!list || list.length === 0) {
       tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text3);">Aucun serveur VPS enregistré. Cliquez sur <strong>+ Ajouter un VPS</strong>.</td></tr>';
+      renderVpsPager(0);
       refreshOnboardingState(list); return;
     }
     tbody.innerHTML = list.map(v => `
@@ -1344,6 +1420,7 @@ async function loadVpsList() {
   } catch(e) {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:#c53030;">Erreur de chargement : ' + esc(e.message) + '</td></tr>';
   }
+  renderVpsPager(total);
   refreshOnboardingState(list);
 }
 

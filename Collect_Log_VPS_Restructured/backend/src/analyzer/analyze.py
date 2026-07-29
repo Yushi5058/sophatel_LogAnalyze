@@ -20,9 +20,9 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from app.models.models import VPSServer, LogCollection, LogEntry, LogSummary
 # Connexion DB centralisée : une seule source de DATABASE_URL (cf. app.core.config),
 # plus de moteur ni de défaut divergent ici.
-from app.core.database import engine, Base, SessionLocal as Session
-
-Base.metadata.create_all(bind=engine)
+# Le schéma est géré par Alembic (migrations) — plus de create_all à l'import
+# (évitait un effet de bord : créer les tables sur simple import du module).
+from app.core.database import SessionLocal as Session
 
 # Champs bruts (dans l'ordre) servant d'empreinte de déduplication d'une ligne.
 _HASH_FIELDS = ["ip", "timestamp", "method", "path", "status", "size",
@@ -88,16 +88,7 @@ def analyze_csv(csv_path: str, vps_name: str, mode: str = "ssh") -> dict:
             db.add(vps)
             db.flush()
 
-        # 2. Créer une collection
-        collection = LogCollection(
-            vps_id=vps.id,
-            source_file=str(csv_path),
-            mode=mode,
-        )
-        db.add(collection)
-        db.flush()
-
-        # 3. Parser les lignes + empreinte de déduplication (doublons intra-fichier écartés)
+        # 2. Parser les lignes + empreinte de déduplication (doublons intra-fichier écartés)
         parsed_rows = []
         seen_hashes: set[str] = set()
         with open(csv_path, newline="", encoding="utf-8") as f:
@@ -108,7 +99,6 @@ def analyze_csv(csv_path: str, vps_name: str, mode: str = "ssh") -> dict:
                     continue
                 seen_hashes.add(h)
                 parsed_rows.append({
-                    "collection_id": collection.id,
                     "vps_id":        vps.id,
                     "line_hash":     h,
                     "ip":            row.get("ip", "").strip() or None,
@@ -135,7 +125,23 @@ def analyze_csv(csv_path: str, vps_name: str, mode: str = "ssh") -> dict:
         new_rows = [r for r in parsed_rows if r["line_hash"] not in existing]
         duplicates = len(parsed_rows) - len(new_rows)
 
-        # 5. Insertion en base (ON CONFLICT DO NOTHING = filet anti-course)
+        # 5. Rien de nouveau -> ne pas créer de collection vide, on sort tôt.
+        if not new_rows:
+            print(f"    {duplicates} ligne(s) déjà connue(s) ignorée(s) — rien de nouveau")
+            return {
+                "collection_id": None, "vps": vps_name, "file": str(csv_path),
+                "total_requests": 0, "unique_ips": 0, "error_count": 0,
+                "success_count": 0, "duplicates_skipped": duplicates, "error_rate": 0.0,
+            }
+
+        # 6. Créer la collection (seulement s'il y a du nouveau) et y rattacher les lignes.
+        collection = LogCollection(vps_id=vps.id, source_file=str(csv_path), mode=mode)
+        db.add(collection)
+        db.flush()
+        for r in new_rows:
+            r["collection_id"] = collection.id
+
+        # 7. Insertion en base (ON CONFLICT DO NOTHING = filet anti-course)
         for i in range(0, len(new_rows), 5000):
             db.execute(
                 pg_insert(LogEntry)
